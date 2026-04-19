@@ -10,6 +10,24 @@ if TYPE_CHECKING:
     from sqlit.domains.connections.domain.config import ConnectionConfig
 
 
+class ChainedTunnel:
+    """Nested SSHTunnelForwarder pair for ProxyJump."""
+
+    def __init__(self, outer: Any, inner: Any) -> None:
+        self._outer = outer
+        self._inner = inner
+
+    @property
+    def local_bind_port(self) -> int:
+        return int(self._inner.local_bind_port)
+
+    def stop(self) -> None:
+        try:
+            self._inner.stop()
+        finally:
+            self._outer.stop()
+
+
 def ensure_ssh_tunnel_available() -> None:
     """Ensure SSH tunnel dependencies are installed."""
     try:
@@ -42,33 +60,35 @@ def create_ssh_tunnel(config: ConnectionConfig) -> tuple[Any, str, int]:
 
     ensure_ssh_tunnel_available()
 
+    if config.tunnel.source == "config":
+        return _create_from_alias(config, endpoint)
+    return _create_from_manual(config, endpoint)
+
+
+def _create_from_manual(config: ConnectionConfig, endpoint: Any) -> tuple[Any, str, int]:
+    """Create SSH tunnel from manual configuration."""
     from sshtunnel import SSHTunnelForwarder
 
-    # Parse remote database host and port
     remote_host = endpoint.host
     remote_port = int(endpoint.port) if endpoint.port else 0
 
-    # SSH connection settings
-    ssh_host = config.tunnel.host
-    ssh_port = int(config.tunnel.port) if config.tunnel.port else 22
-    ssh_username = config.tunnel.username
+    ssh_host = config.tunnel.host  # type: ignore[union-attr]
+    ssh_port = int(config.tunnel.port) if config.tunnel.port else 22  # type: ignore[union-attr]
+    ssh_username = config.tunnel.username  # type: ignore[union-attr]
 
-    # Build SSH auth kwargs
     ssh_kwargs: dict[str, Any] = {
         "ssh_username": ssh_username,
     }
 
-    if config.tunnel.auth_type == "key":
-        # Expand ~ in path
-        key_path = os.path.expanduser(config.tunnel.key_path)
+    if config.tunnel.auth_type == "key":  # type: ignore[union-attr]
+        key_path = os.path.expanduser(config.tunnel.key_path)  # type: ignore[union-attr]
         if Path(key_path).exists():
             ssh_kwargs["ssh_pkey"] = key_path
         else:
             raise ValueError(f"SSH key file not found: {key_path}")
     else:
-        ssh_kwargs["ssh_password"] = config.tunnel.password
+        ssh_kwargs["ssh_password"] = config.tunnel.password  # type: ignore[union-attr]
 
-    # Create tunnel
     tunnel = SSHTunnelForwarder(
         (ssh_host, ssh_port),
         remote_bind_address=(remote_host, remote_port),
@@ -76,6 +96,47 @@ def create_ssh_tunnel(config: ConnectionConfig) -> tuple[Any, str, int]:
     )
     tunnel.start()
 
+    return tunnel, "127.0.0.1", tunnel.local_bind_port
+
+
+def _create_from_alias(config: ConnectionConfig, endpoint: Any) -> tuple[Any, str, int]:
+    """Create SSH tunnel from ~/.ssh/config alias."""
+    from sshtunnel import SSHTunnelForwarder
+
+    from sqlit.domains.connections.app import ssh_config as ssh_cfg
+
+    target = ssh_cfg.resolve(config.tunnel.config_alias)  # type: ignore[union-attr]
+    remote = (endpoint.host, int(endpoint.port) if endpoint.port else 0)
+
+    if target.proxyjump:
+        jump = ssh_cfg.resolve(target.proxyjump)
+        outer = SSHTunnelForwarder(
+            (jump.hostname, jump.port),
+            ssh_username=jump.user,
+            ssh_pkey=jump.identityfile,
+            remote_bind_address=(target.hostname, target.port),
+        )
+        outer.start()
+        try:
+            inner = SSHTunnelForwarder(
+                ("127.0.0.1", outer.local_bind_port),
+                ssh_username=target.user,
+                ssh_pkey=target.identityfile,
+                remote_bind_address=remote,
+            )
+            inner.start()
+        except Exception:
+            outer.stop()
+            raise
+        return ChainedTunnel(outer, inner), "127.0.0.1", inner.local_bind_port
+
+    tunnel = SSHTunnelForwarder(
+        (target.hostname, target.port),
+        ssh_username=target.user,
+        ssh_pkey=target.identityfile,
+        remote_bind_address=remote,
+    )
+    tunnel.start()
     return tunnel, "127.0.0.1", tunnel.local_bind_port
 
 

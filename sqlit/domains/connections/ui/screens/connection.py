@@ -157,8 +157,8 @@ class ConnectionScreen(ModalScreen):
 
     def _on_browse_file(self, field_name: str) -> None:
         """Open file picker for a file field."""
-        from sqlit.shared.ui.screens.file_picker import FilePickerMode, FilePickerScreen
         from sqlit.domains.connections.ui.fields import FieldType
+        from sqlit.shared.ui.screens.file_picker import FilePickerMode, FilePickerScreen
 
         # Get current value from the field
         current_value = ""
@@ -652,15 +652,28 @@ class ConnectionScreen(ModalScreen):
         if supports_ssh(db_type.value):
             ssh_enabled = config_data.pop("ssh_enabled", "disabled") == "enabled"
             if ssh_enabled:
-                tunnel = {
-                    "enabled": True,
-                    "host": config_data.pop("ssh_host", ""),
-                    "port": config_data.pop("ssh_port", "22"),
-                    "username": config_data.pop("ssh_username", ""),
-                    "auth_type": config_data.pop("ssh_auth_type", "key"),
-                    "password": config_data.pop("ssh_password", None),
-                    "key_path": config_data.pop("ssh_key_path", ""),
-                }
+                source = config_data.pop("ssh_source", "manual")
+                if source == "config":
+                    tunnel = {
+                        "enabled": True,
+                        "source": "config",
+                        "config_alias": config_data.pop("ssh_config_alias", "").strip(),
+                    }
+                    # Discard manual keys if present
+                    for k in ("ssh_host", "ssh_port", "ssh_username", "ssh_auth_type", "ssh_key_path", "ssh_password"):
+                        config_data.pop(k, None)
+                else:
+                    tunnel = {
+                        "enabled": True,
+                        "source": "manual",
+                        "host": config_data.pop("ssh_host", ""),
+                        "port": config_data.pop("ssh_port", "22"),
+                        "username": config_data.pop("ssh_username", ""),
+                        "auth_type": config_data.pop("ssh_auth_type", "key"),
+                        "password": config_data.pop("ssh_password", None),
+                        "key_path": config_data.pop("ssh_key_path", ""),
+                    }
+                    config_data.pop("ssh_config_alias", None)
 
         config_data["endpoint"] = endpoint
         config_data["tunnel"] = tunnel

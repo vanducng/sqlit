@@ -5,7 +5,7 @@ Schema definitions live in each provider's schema.py module.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -38,6 +38,7 @@ class SchemaField:
     placeholder: str = ""
     description: str = ""
     options: tuple[SelectOption, ...] = ()
+    options_provider: Callable[[], Iterable[SelectOption]] | None = None
     visible_when: Callable[[dict], bool] | None = None
     group: str | None = None
     advanced: bool = False
@@ -121,12 +122,33 @@ def _ssh_enabled(v: dict) -> bool:
     return v.get("ssh_enabled") == "enabled"
 
 
-def _ssh_auth_is_key(v: dict) -> bool:
-    return _ssh_enabled(v) and v.get("ssh_auth_type") == "key"
+def _ssh_source_manual(v: dict) -> bool:
+    return _ssh_enabled(v) and v.get("ssh_source", "manual") == "manual"
 
 
-def _ssh_auth_is_password(v: dict) -> bool:
-    return _ssh_enabled(v) and v.get("ssh_auth_type") == "password"
+def _ssh_source_config(v: dict) -> bool:
+    return _ssh_enabled(v) and v.get("ssh_source") == "config"
+
+
+def _ssh_manual_auth_is_key(v: dict) -> bool:
+    return _ssh_source_manual(v) and v.get("ssh_auth_type") == "key"
+
+
+def _ssh_manual_auth_is_password(v: dict) -> bool:
+    return _ssh_source_manual(v) and v.get("ssh_auth_type") == "password"
+
+
+def _get_alias_options() -> tuple[SelectOption, ...]:
+    """Get SSH aliases from ~/.ssh/config (lazy import, handles missing paramiko)."""
+    try:
+        from sqlit.domains.connections.app.ssh_config import list_aliases
+
+        aliases = list_aliases()
+    except Exception:
+        aliases = []
+    if not aliases:
+        return (SelectOption("", "(no ~/.ssh/config aliases available)"),)
+    return tuple(SelectOption(a.name, f"{a.name}  ({a.user or '?'}@{a.hostname}:{a.port})") for a in aliases)
 
 
 def _get_ssh_fields() -> tuple[SchemaField, ...]:
@@ -143,11 +165,31 @@ def _get_ssh_fields() -> tuple[SchemaField, ...]:
             tab="ssh",
         ),
         SchemaField(
+            name="ssh_source",
+            label="Source",
+            field_type=FieldType.SELECT,
+            options=(
+                SelectOption("manual", "Manual"),
+                SelectOption("config", "From ~/.ssh/config"),
+            ),
+            default="manual",
+            visible_when=_ssh_enabled,
+            tab="ssh",
+        ),
+        SchemaField(
+            name="ssh_config_alias",
+            label="Alias",
+            field_type=FieldType.SELECT,
+            options_provider=_get_alias_options,
+            visible_when=_ssh_source_config,
+            tab="ssh",
+        ),
+        SchemaField(
             name="ssh_host",
             label="Host",
             placeholder="bastion.example.com",
             required=True,
-            visible_when=_ssh_enabled,
+            visible_when=_ssh_source_manual,
             tab="ssh",
         ),
         SchemaField(
@@ -155,7 +197,7 @@ def _get_ssh_fields() -> tuple[SchemaField, ...]:
             label="Port",
             placeholder="22",
             default="22",
-            visible_when=_ssh_enabled,
+            visible_when=_ssh_source_manual,
             tab="ssh",
         ),
         SchemaField(
@@ -163,7 +205,7 @@ def _get_ssh_fields() -> tuple[SchemaField, ...]:
             label="Username",
             placeholder="ubuntu",
             required=True,
-            visible_when=_ssh_enabled,
+            visible_when=_ssh_source_manual,
             tab="ssh",
         ),
         SchemaField(
@@ -175,7 +217,7 @@ def _get_ssh_fields() -> tuple[SchemaField, ...]:
                 SelectOption("password", "Password"),
             ),
             default="key",
-            visible_when=_ssh_enabled,
+            visible_when=_ssh_source_manual,
             tab="ssh",
         ),
         SchemaField(
@@ -184,7 +226,7 @@ def _get_ssh_fields() -> tuple[SchemaField, ...]:
             field_type=FieldType.FILE,
             placeholder="~/.ssh/id_rsa",
             default="~/.ssh/id_rsa",
-            visible_when=_ssh_auth_is_key,
+            visible_when=_ssh_manual_auth_is_key,
             tab="ssh",
         ),
         SchemaField(
@@ -192,7 +234,7 @@ def _get_ssh_fields() -> tuple[SchemaField, ...]:
             label="Password",
             field_type=FieldType.PASSWORD,
             placeholder="(empty = ask every connect)",
-            visible_when=_ssh_auth_is_password,
+            visible_when=_ssh_manual_auth_is_password,
             tab="ssh",
         ),
     )

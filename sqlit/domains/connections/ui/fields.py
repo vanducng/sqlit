@@ -110,8 +110,14 @@ def schema_field_to_definition(schema_field: SchemaField) -> FieldDefinition:
     Returns:
         UI-specific FieldDefinition for Textual forms
     """
-    # Convert immutable tuple of SelectOption to mutable list
-    options = list(schema_field.options)
+    # Use options_provider if set, otherwise use static options
+    if schema_field.options_provider is not None:
+        try:
+            options = list(schema_field.options_provider())
+        except Exception:
+            options = list(schema_field.options)
+    else:
+        options = list(schema_field.options)
 
     # Determine width based on group membership
     width: str | int = "full"

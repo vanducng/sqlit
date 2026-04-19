@@ -15,6 +15,7 @@ All notable user-facing changes to sqlit.
 ### Added
 
 - `<space>ga` leader alias for "run all statements".
+- SSH tab now discovers aliases from `~/.ssh/config` with ProxyJump support.
 - Subtle background tint on the lines of the statement under the cursor when
   the buffer contains two or more statements, so you can see what `Enter` will
   execute before pressing it.
