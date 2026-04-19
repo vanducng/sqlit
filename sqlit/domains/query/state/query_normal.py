@@ -54,8 +54,8 @@ class QueryNormalModeState(State):
         # Clipboard actions
         self.allows("select_all", help="Select all text")
         self.allows("copy_selection", help="Copy selection")
-        self.allows("paste", help="Paste")
-        self.allows("paste_line_below", help="Paste on next line")
+        self.allows("paste", help="Paste (linewise: line below; charwise: at cursor)")
+        self.allows("paste_line_below", help="Paste (linewise: line above; charwise: at cursor)")
         # Selection actions
         self.allows("select_left", help="Select left")
         self.allows("select_right", help="Select right")

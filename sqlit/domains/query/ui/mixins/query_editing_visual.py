@@ -112,6 +112,7 @@ class QueryEditingVisualMixin:
         )
         if text:
             self._copy_text(text)
+            self._record_yank(text, linewise=False)
 
         from sqlit.core.vim import VimMode
 

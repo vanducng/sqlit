@@ -39,6 +39,8 @@ class QueryStateProtocol(Protocol):
 
 class QueryActionsProtocol(Protocol):
     _history_store: Any | None
+    _last_yank_text: str
+    _last_yank_linewise: bool
 
     def action_execute_query(self) -> None:
         ...
@@ -121,6 +123,12 @@ class QueryActionsProtocol(Protocol):
         ...
 
     def _get_clipboard_text(self) -> str:
+        ...
+
+    def _record_yank(self, text: str, *, linewise: bool) -> None:
+        ...
+
+    def _is_linewise_clipboard(self, clipboard: str) -> bool:
         ...
 
     def _get_undo_history(self) -> Any:

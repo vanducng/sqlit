@@ -97,6 +97,7 @@ class QueryEditingVisualLineMixin:
         result = operator_yank(text, range_obj)
         if result.yanked:
             self._copy_text(result.yanked)
+        self._record_yank(result.yanked, linewise=True)
 
         # Exit visual line mode before flash
         self._visual_line_anchor_row = None
@@ -133,6 +134,7 @@ class QueryEditingVisualLineMixin:
 
         if result.yanked:
             self._copy_text(result.yanked)
+        self._record_yank(result.yanked, linewise=True)
 
         self.query_input.text = result.text
         self.query_input.cursor_location = (result.row, result.col)
@@ -168,6 +170,7 @@ class QueryEditingVisualLineMixin:
 
         if result.yanked:
             self._copy_text(result.yanked)
+        self._record_yank(result.yanked, linewise=True)
 
         self.query_input.text = result.text
         self.query_input.cursor_location = (result.row, result.col)

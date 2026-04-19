@@ -4,6 +4,7 @@ from .clipboard import (
     PasteResult,
     get_selection_text,
     paste_text,
+    paste_text_above,
     paste_text_below,
     select_all_range,
 )
@@ -52,6 +53,7 @@ __all__ = [
     "PasteResult",
     "get_selection_text",
     "paste_text",
+    "paste_text_above",
     "paste_text_below",
     "select_all_range",
     # Motions
