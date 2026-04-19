@@ -350,6 +350,9 @@ class DefaultKeymapProvider(KeymapProvider):
             LeaderCommandDef("g", "first_row", "Go to first row", "Go to", menu="rg"),
             # tg tree g motion menu (vim-style gg)
             LeaderCommandDef("g", "first_node", "Go to first node", "Go to", menu="tg"),
+            # tz tree z motion menu (vim-style zz/zc)
+            LeaderCommandDef("z", "center_cursor", "Center on cursor", "Go to", menu="tz"),
+            LeaderCommandDef("c", "collapse_tree", "Collapse all", "Actions", menu="tz"),
             # vy value view yank menu (tree mode)
             LeaderCommandDef("y", "value", "Copy value", "Copy", menu="vy"),
             LeaderCommandDef("f", "field", "Copy field", "Copy", menu="vy"),
@@ -376,7 +379,7 @@ class DefaultKeymapProvider(KeymapProvider):
             ActionKeyDef("D", "duplicate_connection", "tree"),
             ActionKeyDef("m", "move_connection_to_folder", "tree"),
             ActionKeyDef("x", "disconnect", "tree"),
-            ActionKeyDef("z", "collapse_tree", "tree"),
+            ActionKeyDef("z", "tz_leader_key", "tree"),
             ActionKeyDef("j", "tree_cursor_down", "tree"),
             ActionKeyDef("down", "tree_cursor_down", "tree", primary=False),
             ActionKeyDef("k", "tree_cursor_up", "tree"),

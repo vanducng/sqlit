@@ -371,6 +371,34 @@ class TreeMixin(TreeSchemaMixin, TreeLabelMixin):
         self._tree_cursor_step(-1, 100_000)
         self._tree_update_visual()
 
+    def action_tz_leader_key(self: TreeMixinHost) -> None:
+        """Show the tree z-motion leader menu (first press of zz/zc)."""
+        self._start_leader_pending("tz")
+
+    def action_tz_center_cursor(self: TreeMixinHost) -> None:
+        """Scroll tree so cursor line sits at viewport center (vim zz)."""
+        self._cancel_leader_pending()
+        tree = self.object_tree
+        if not tree.has_focus:
+            return
+        cursor_line = getattr(tree, "cursor_line", -1)
+        if cursor_line < 0:
+            return
+        try:
+            height = int(tree.size.height)
+        except Exception:
+            height = 0
+        target_y = max(0, cursor_line - height // 2)
+        try:
+            tree.scroll_to(y=target_y, animate=False)
+        except Exception:
+            pass
+
+    def action_tz_collapse_tree(self: TreeMixinHost) -> None:
+        """Collapse all nodes (vim-style zc via tz leader)."""
+        self._cancel_leader_pending()
+        self.action_collapse_tree()
+
     def action_select_table(self: TreeMixinHost) -> None:
         """Generate and execute SELECT query for selected table/view, or show info for indexes/triggers/sequences."""
         if not self.current_provider or not self._session:

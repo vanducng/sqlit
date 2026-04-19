@@ -15,6 +15,9 @@ class TreeFocusedState(State):
         self.allows("new_connection", label="New", help="New connection")
         self.allows("refresh_tree", label="Refresh", help="Refresh tree")
         self.allows("collapse_tree", help="Collapse all")
+        self.allows("tz_leader_key", help="Z motions (menu)")  # vim z prefix
+        self.allows("tz_center_cursor", help="Center viewport on cursor")  # vim zz
+        self.allows("tz_collapse_tree", help="Collapse all")  # vim zc
         self.allows("tree_cursor_down")  # vim j
         self.allows("tree_cursor_up")  # vim k
         self.allows("tree_cursor_last", help="Go to last node")  # vim G

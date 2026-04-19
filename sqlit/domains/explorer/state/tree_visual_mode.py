@@ -64,6 +64,16 @@ class TreeVisualModeState(State):
             label="Extend to Top",
             help="Extend selection to first node",
         )
+        self.allows(
+            "tz_leader_key",
+            label="Z",
+            help="Z motions (menu)",
+        )
+        self.allows(
+            "tz_center_cursor",
+            label="Center",
+            help="Center viewport on cursor",
+        )
 
     def get_display_bindings(self, app: InputContext) -> tuple[list[DisplayBinding], list[DisplayBinding]]:
         left: list[DisplayBinding] = []
