@@ -55,6 +55,7 @@ class QueryNormalModeState(State):
         self.allows("select_all", help="Select all text")
         self.allows("copy_selection", help="Copy selection")
         self.allows("paste", help="Paste")
+        self.allows("paste_line_below", help="Paste on next line")
         # Selection actions
         self.allows("select_left", help="Select left")
         self.allows("select_right", help="Select right")

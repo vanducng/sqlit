@@ -104,6 +104,25 @@ class QueryEditingClipboardMixin:
         cursor = self.query_input.cursor_location
         self.query_input.selection = Selection(cursor, cursor)
 
+    def action_paste_line_below(self: QueryMixinHost) -> None:
+        """Paste clipboard content as a new line below current line (P)."""
+        from textual.widgets.text_area import Selection
+
+        from sqlit.domains.query.editing import paste_text_below
+
+        clipboard = self._get_clipboard_text()
+        if not clipboard:
+            return
+
+        self._push_undo_state()
+
+        row, _ = self.query_input.cursor_location
+        paste_result = paste_text_below(self.query_input.text, row, clipboard)
+        self.query_input.text = paste_result.text
+        self.query_input.cursor_location = (paste_result.row, paste_result.col)
+        cursor = self.query_input.cursor_location
+        self.query_input.selection = Selection(cursor, cursor)
+
     def _get_clipboard_text(self: QueryMixinHost) -> str:
         """Get text from system clipboard."""
         try:
