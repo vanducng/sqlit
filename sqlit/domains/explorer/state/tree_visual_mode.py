@@ -39,6 +39,31 @@ class TreeVisualModeState(State):
             label="Extend Up",
             help="Extend selection up",
         )
+        self.allows(
+            "tree_cursor_last",
+            label="Extend to Bottom",
+            help="Extend selection to last node",
+        )
+        self.allows(
+            "tree_cursor_half_page_down",
+            label="Extend Half Page Down",
+            help="Extend selection half page down",
+        )
+        self.allows(
+            "tree_cursor_half_page_up",
+            label="Extend Half Page Up",
+            help="Extend selection half page up",
+        )
+        self.allows(
+            "tg_leader_key",
+            label="Go",
+            help="Go motions (menu)",
+        )
+        self.allows(
+            "tg_first_node",
+            label="Extend to Top",
+            help="Extend selection to first node",
+        )
 
     def get_display_bindings(self, app: InputContext) -> tuple[list[DisplayBinding], list[DisplayBinding]]:
         left: list[DisplayBinding] = []

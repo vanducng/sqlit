@@ -312,6 +312,84 @@ class TreeMixin(TreeSchemaMixin, TreeLabelMixin):
             if callable(update_visual):
                 update_visual()
 
+    def _tree_half_page(self: TreeMixinHost) -> int:
+        """Half the tree's visible viewport height, min 1."""
+        try:
+            height = int(self.object_tree.size.height)
+        except Exception:
+            height = 0
+        return max(1, height // 2)
+
+    def _tree_update_visual(self: TreeMixinHost) -> None:
+        update_visual = getattr(self, "_update_visual_selection", None)
+        if callable(update_visual):
+            update_visual()
+
+    def action_tree_cursor_half_page_down(self: TreeMixinHost) -> None:
+        """Move tree cursor down by half viewport (vim Ctrl+D)."""
+        if not self.object_tree.has_focus:
+            return
+        steps = self._tree_half_page()
+        last_line = -1
+        for _ in range(steps):
+            current = getattr(self.object_tree, "cursor_line", -1)
+            if current == last_line:
+                break
+            last_line = current
+            self.object_tree.action_cursor_down()
+        self._tree_update_visual()
+
+    def action_tree_cursor_half_page_up(self: TreeMixinHost) -> None:
+        """Move tree cursor up by half viewport (vim Ctrl+U)."""
+        if not self.object_tree.has_focus:
+            return
+        steps = self._tree_half_page()
+        last_line = -1
+        for _ in range(steps):
+            current = getattr(self.object_tree, "cursor_line", -1)
+            if current == last_line or current == 0:
+                break
+            last_line = current
+            self.object_tree.action_cursor_up()
+        self._tree_update_visual()
+
+    def action_tree_cursor_last(self: TreeMixinHost) -> None:
+        """Jump tree cursor to last visible node (vim G)."""
+        if not self.object_tree.has_focus:
+            return
+        # Loop action_cursor_down until cursor_line stops advancing.
+        # Safety cap prevents runaway on bogus widget state.
+        last_line = -1
+        for _ in range(100_000):
+            current = getattr(self.object_tree, "cursor_line", -1)
+            if current == last_line:
+                break
+            last_line = current
+            self.object_tree.action_cursor_down()
+        self._tree_update_visual()
+
+    def action_tg_leader_key(self: TreeMixinHost) -> None:
+        """Show the tree g-motion leader menu (first press of gg)."""
+        start = getattr(self, "_start_leader_pending", None)
+        if callable(start):
+            start("tg")
+
+    def action_tg_first_node(self: TreeMixinHost) -> None:
+        """Jump tree cursor to first node (vim gg)."""
+        cancel = getattr(self, "_cancel_leader_pending", None)
+        if callable(cancel):
+            cancel()
+        if not self.object_tree.has_focus:
+            return
+        last_line = -1
+        for _ in range(100_000):
+            current = getattr(self.object_tree, "cursor_line", -1)
+            if current == last_line or current == 0:
+                break
+            last_line = current
+            self.object_tree.action_cursor_up()
+        self._tree_update_visual()
+
     def action_select_table(self: TreeMixinHost) -> None:
         """Generate and execute SELECT query for selected table/view, or show info for indexes/triggers/sequences."""
         if not self.current_provider or not self._session:
