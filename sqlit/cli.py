@@ -484,7 +484,20 @@ def main() -> int:
     )
     conn_subparsers = conn_parser.add_subparsers(dest="conn_command", help="Connection commands")
 
-    conn_subparsers.add_parser("list", help="List all saved connections")
+    list_parser = conn_subparsers.add_parser("list", help="List all saved connections")
+    list_parser.add_argument(
+        "--format",
+        "-o",
+        default="table",
+        choices=["table", "json"],
+        help="Output format (default: table). Use 'json' for machine/LLM consumption.",
+    )
+    list_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="In table format, show extra columns (port, ssh tunnel, source).",
+    )
 
     add_parser = conn_subparsers.add_parser(
         "add",
