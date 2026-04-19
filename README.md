@@ -228,6 +228,7 @@ Use with operators like `y`, `d`, `c` (e.g. `dw`, `y$`).
 | `<space>z` | Cancel running query |
 | `<space>e` | Toggle Explorer |
 | `<space>f` | Toggle Maximize |
+| `<space>r` | Resize panes (then `←↑↓→`; any other key exits) |
 | `<space>t` | Change theme |
 | `<space>ga` / `<space>gr` | Run **all** statements in the buffer |
 | `<space>gs` | Run statement at cursor (same as `Enter`) |
@@ -262,7 +263,22 @@ sqlit reads optional overrides from `$XDG_CONFIG_HOME/sqlit/settings.json` (defa
 
 Shortcut: `sqlit config edit` opens the file in `$EDITOR`. Inspect resolved bindings with `sqlit config show-keymap` — overridden rows are flagged with `*`.
 
-Only pane-focus actions are rebindable today (`focus_explorer`, `focus_query`, `focus_results`). Other keys (vim motions, chords, leader menus) stay fixed by design.
+Rebindable actions: `focus_explorer`, `focus_query`, `focus_results`, `resize_pane_{left,right,up,down}`. The resize actions ship without a default key (use `<space>r` mode by default) — bind `ctrl+arrow` if you'd rather skip the leader prefix:
+
+```json
+{
+  "keymap": {
+    "overrides": {
+      "resize_pane_left":  "ctrl+left",
+      "resize_pane_right": "ctrl+right",
+      "resize_pane_up":    "ctrl+up",
+      "resize_pane_down":  "ctrl+down"
+    }
+  }
+}
+```
+
+Other keys (vim motions, chords, leader menus) stay fixed by design.
 
 ## FAQ
 

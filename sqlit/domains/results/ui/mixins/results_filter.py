@@ -36,6 +36,10 @@ class ResultsFilterMixin:
     _results_filter_stacked: bool = False
     _results_filter_target_section: Any | None = None
     _results_filter_target_table: Any | None = None
+    # Truly-original rows/columns preserved across accept so re-opening the
+    # filter always sees the full query result, not the last filtered subset.
+    _results_filter_saved_rows: list[tuple] | None = None
+    _results_filter_saved_columns: list[str] | None = None
 
     # Maximum matches to display (performance optimization)
     MAX_FILTER_MATCHES = 5000
@@ -89,15 +93,28 @@ class ResultsFilterMixin:
             except Exception:
                 pass
         else:
-            # Check if there are results to filter
-            if not self._last_result_rows:
+            # Prefer the truly-original snapshot if a previous accept stashed
+            # it; this ensures re-opening the filter always starts from the
+            # full result set, not the last committed filtered subset.
+            if self._results_filter_saved_rows is not None:
+                base_columns = list(self._results_filter_saved_columns or [])
+                base_rows = list(self._results_filter_saved_rows)
+                # Restore the full view immediately so the user sees all rows
+                # while typing into an empty filter.
+                self._last_result_columns = base_columns
+                self._last_result_rows = base_rows
+                self._replace_results_table(base_columns, base_rows)
+            elif not self._last_result_rows:
                 self.notify("No results to filter", severity="warning")
                 return
-            self._results_filter_original_columns = list(self._last_result_columns)
-            self._results_filter_original_rows = list(self._last_result_rows)
+            else:
+                base_columns = list(self._last_result_columns)
+                base_rows = list(self._last_result_rows)
+            self._results_filter_original_columns = base_columns
+            self._results_filter_original_rows = base_rows
             # Initially all rows match (no filter applied)
-            self._results_filter_matching_rows = list(self._last_result_rows)
-            self._prime_results_filter_cache(self._last_result_rows)
+            self._results_filter_matching_rows = list(base_rows)
+            self._prime_results_filter_cache(base_rows)
 
         self._results_filter_visible = True
         self._results_filter_text = ""
@@ -126,6 +143,10 @@ class ResultsFilterMixin:
             if self._results_filter_original_rows:
                 self._replace_results_table(self._last_result_columns, self._results_filter_original_rows)
                 self._last_result_rows = list(self._results_filter_original_rows)
+            # Closing via Escape returns to the full view; the saved snapshot
+            # is no longer needed.
+            self._results_filter_saved_rows = None
+            self._results_filter_saved_columns = None
 
         self._update_footer_bindings()
         self._results_filter_stacked = False
@@ -145,6 +166,10 @@ class ResultsFilterMixin:
             if self._results_filter_target_section is not None:
                 self._results_filter_target_section.result_rows = list(self._results_filter_matching_rows)
         else:
+            # Stash the truly-original rows so pressing `/` again can restore
+            # the full view even though the committed view is filtered.
+            self._results_filter_saved_columns = list(self._results_filter_original_columns)
+            self._results_filter_saved_rows = list(self._results_filter_original_rows)
             # Update stored rows to the filtered data
             self._last_result_rows = list(self._results_filter_matching_rows)
 
@@ -222,6 +247,15 @@ class ResultsFilterMixin:
             event.stop()
             return
 
+        # Ctrl+U: clear the entire filter text in one stroke
+        if key == "ctrl+u":
+            if self._results_filter_text:
+                self._results_filter_text = ""
+                self._schedule_filter_update()
+            event.prevent_default()
+            event.stop()
+            return
+
         # Handle printable characters - use event.character for proper shift support
         char = getattr(event, "character", None)
         if char and char.isprintable():
@@ -235,6 +269,22 @@ class ResultsFilterMixin:
         parent_on_key = getattr(super(), "on_key", None)
         if callable(parent_on_key):
             parent_on_key(event)
+
+    def on_paste(self: ResultsFilterMixinHost, event: Any) -> None:
+        """Append clipboard content to the results filter when active."""
+        if not self._results_filter_visible:
+            parent = getattr(super(), "on_paste", None)
+            if callable(parent):
+                parent(event)
+            return
+
+        text = getattr(event, "text", "") or ""
+        flat = text.replace("\r", "").replace("\n", " ").strip()
+        if flat:
+            self._results_filter_text += flat
+            self._schedule_filter_update()
+        event.prevent_default()
+        event.stop()
 
     def _schedule_filter_update(self: ResultsFilterMixinHost) -> None:
         """Schedule a debounced filter update based on row count."""

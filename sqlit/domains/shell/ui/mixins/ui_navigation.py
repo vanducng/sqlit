@@ -181,6 +181,56 @@ class UINavigationMixin(UIStatusMixin, UILeaderMixin):
         help_text = self._state_machine.generate_help_text()
         self.push_screen(HelpScreen(help_text))
 
+    def _resolve_focused_pane(self: UINavigationMixinHost) -> str | None:
+        """Walk parent chain to find which pane (sidebar/query/results) owns focus."""
+        widget = getattr(self, "focused", None)
+        while widget is not None:
+            wid = getattr(widget, "id", None)
+            if wid == "sidebar":
+                return "sidebar"
+            if wid == "query-area":
+                return "query"
+            if wid == "results-area":
+                return "results"
+            widget = getattr(widget, "parent", None)
+        return None
+
+    def _do_resize(self: UINavigationMixinHost, direction: str) -> None:
+        """Resize the focused pane. No-op in any text-input context where arrow
+        keys carry caret-movement semantics (query INSERT, tree filter input,
+        results filter input). Protects user-rebound ctrl+arrow from stealing
+        word-nav inside text fields."""
+        from sqlit.core.vim import VimMode
+
+        if self.vim_mode == VimMode.INSERT and self._get_focus_pane() == "query":
+            return
+        if getattr(self, "_tree_filter_visible", False):
+            return
+        if getattr(self, "_results_filter_visible", False):
+            return
+        pane = self._resolve_focused_pane()
+        if pane is None:
+            return
+        if self._layout_state.adjust(pane, direction):
+            self._apply_layout_state()
+
+    def action_resize_pane_left(self: UINavigationMixinHost) -> None:
+        self._do_resize("left")
+
+    def action_resize_pane_right(self: UINavigationMixinHost) -> None:
+        self._do_resize("right")
+
+    def action_resize_pane_up(self: UINavigationMixinHost) -> None:
+        self._do_resize("up")
+
+    def action_resize_pane_down(self: UINavigationMixinHost) -> None:
+        self._do_resize("down")
+
+    def action_enter_resize_mode(self: UINavigationMixinHost) -> None:
+        """Enter resize mode: arrow keys resize, any other key exits."""
+        self._resize_mode_active = True
+        self.notify("RESIZE — \u2190\u2191\u2193\u2192 to resize, any other key exits", timeout=3)
+
     def action_toggle_process_worker(self: UINavigationMixinHost) -> None:
         """Toggle the process worker setting."""
         enabled = not bool(self.services.runtime.process_worker)

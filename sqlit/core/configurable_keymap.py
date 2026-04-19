@@ -130,4 +130,18 @@ class ConfigurableKeymapProvider(DefaultKeymapProvider):
                 )
                 continue
             result.append(entry)
+
+        # Inject entries for whitelisted actions that ship without a default key.
+        existing_actions = {e.action for e in result if e.primary}
+        for action, key in self._overrides.items():
+            if action in existing_actions:
+                continue
+            emit_debug_event(
+                "keymap_override",
+                category="keybinding",
+                action=action,
+                old_key=None,
+                new_key=key,
+            )
+            result.append(ActionKeyDef(key=key, action=action, context=None, primary=True))
         return result

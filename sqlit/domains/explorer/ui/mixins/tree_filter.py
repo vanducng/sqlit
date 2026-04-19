@@ -175,6 +175,23 @@ class TreeFilterMixin:
         # Pass unhandled keys to next mixin
         super().on_key(event)  # type: ignore[misc]
 
+    def on_paste(self: TreeFilterMixinHost, event: Any) -> None:
+        """Append clipboard content to the filter when it is active."""
+        if not (self._tree_filter_visible and self._tree_filter_typing):
+            parent = getattr(super(), "on_paste", None)
+            if callable(parent):
+                parent(event)
+            return
+
+        text = getattr(event, "text", "") or ""
+        # Filter is single-line; flatten pasted newlines to spaces
+        flat = text.replace("\r", "").replace("\n", " ").strip()
+        if flat:
+            self._tree_filter_text += flat
+            self._update_tree_filter()
+        event.prevent_default()
+        event.stop()
+
     def _update_tree_filter(self: TreeFilterMixinHost) -> None:
         """Update the tree based on current filter text."""
         self._restore_tree_labels()

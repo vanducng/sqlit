@@ -58,6 +58,11 @@ def run_show_keymap() -> int:
         for k in provider.get_action_keys()
         if k.primary
     ]
+    # Surface rebindable actions that ship without a default key (e.g. resize_pane_*)
+    # so users can discover them.
+    bound_actions = {r[1] for r in rows}
+    for action in sorted(REBINDABLE_ACTIONS - bound_actions):
+        rows.append(("(unbound)", action, "", ""))
     rows.sort(key=lambda r: (r[1] not in REBINDABLE_ACTIONS, r[1]))
     _print_table(rows, ("KEY", "ACTION", "CONTEXT", "OVERRIDDEN"))
     return 0

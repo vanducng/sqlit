@@ -120,3 +120,6 @@ class UILeaderMixin:
 
     def action_leader_quit(self: UINavigationMixinHost) -> None:
         self._execute_leader_command("quit")
+
+    def action_leader_enter_resize_mode(self: UINavigationMixinHost) -> None:
+        self._execute_leader_command("enter_resize_mode")

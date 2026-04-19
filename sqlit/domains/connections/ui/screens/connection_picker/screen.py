@@ -305,6 +305,19 @@ class ConnectionPickerScreen(ModalScreen):
             event.prevent_default()
             event.stop()
 
+    def on_paste(self, event: Any) -> None:
+        """Append clipboard content to the picker filter when active."""
+        if not self._filter_state.active:
+            return
+        text = getattr(event, "text", "") or ""
+        flat = text.replace("\r", "").replace("\n", " ").strip()
+        if flat:
+            self._filter_state.text += flat
+            self._update_filter_display()
+            self._update_list()
+        event.prevent_default()
+        event.stop()
+
     def action_backspace(self) -> None:
         if not self._filter_state.active:
             return

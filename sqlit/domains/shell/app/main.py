@@ -40,6 +40,7 @@ from sqlit.domains.shell.app.omarchy import DEFAULT_THEME
 from sqlit.domains.shell.app.startup_flow import run_on_mount
 from sqlit.domains.shell.app.theme_manager import ThemeManager
 from sqlit.domains.shell.state import UIStateMachine
+from sqlit.domains.shell.state.layout_state import LayoutState
 from sqlit.domains.shell.ui.mixins.ui_navigation import UINavigationMixin
 from sqlit.shared.app import AppServices, RuntimeConfig, build_app_services
 from sqlit.shared.core.debug_events import (
@@ -206,6 +207,13 @@ class SSMSTUI(
         self._restart_requested: bool = False
         # Idle scheduler for background work
         self._idle_scheduler: IdleScheduler | None = None
+        # Pane layout state (sidebar width, query/results split) — persisted to settings.json
+        try:
+            raw_layout = self.services.settings_store.get("layout", {}) or {}
+        except Exception:
+            raw_layout = {}
+        self._layout_state = LayoutState.from_dict(raw_layout if isinstance(raw_layout, dict) else {})
+        self._resize_mode_active: bool = False
         self._startup_stamp("init_end")
 
     @property
@@ -308,6 +316,7 @@ class SSMSTUI(
             has_results=has_results,
             stacked_result_count=stacked_result_count,
             count_buffer=self._count_buffer,
+            resize_mode_active=self._resize_mode_active,
         )
 
     def _debug_screen_label(self, screen: Any | None) -> str:
@@ -422,6 +431,9 @@ class SSMSTUI(
         self._last_key_at = time.perf_counter()
         ctx = self._get_input_context()
         if ctx.modal_open:
+            # Clear resize mode if a modal opens — otherwise the flag would persist
+            # silently across modal dismissal and surprise the next keypress.
+            self._resize_mode_active = False
             if event.key in {"escape", "enter"}:
                 self.emit_debug_event(
                     "key.modal",
@@ -430,6 +442,22 @@ class SSMSTUI(
                     stack=self._debug_screen_stack(),
                 )
             return
+
+        if self._resize_mode_active:
+            arrow_map = {
+                "left": "resize_pane_left",
+                "right": "resize_pane_right",
+                "up": "resize_pane_up",
+                "down": "resize_pane_down",
+            }
+            action = arrow_map.get(event.key)
+            if action is not None:
+                getattr(self, f"action_{action}")()
+                event.prevent_default()
+                event.stop()
+                return
+            self._resize_mode_active = False
+            # Fall through so the non-arrow key dispatches normally
 
         if self._handle_command_input(event, ctx):
             return
@@ -1152,9 +1180,33 @@ class SSMSTUI(
         """Initialize the app."""
         run_on_mount(cast(AppProtocol, self))
         self._apply_theme_classes()
+        self._apply_layout_state()
+
+    def _apply_layout_state(self) -> None:
+        """Push current LayoutState onto live widget styles. Safe to call repeatedly."""
+        try:
+            sidebar = self.query_one("#sidebar")
+            sidebar.styles.width = self._layout_state.sidebar_width
+        except Exception:
+            pass
+        try:
+            qa = self.query_one("#query-area")
+            ra = self.query_one("#results-area")
+            qa.styles.height = f"{self._layout_state.query_height_pct}%"
+            ra.styles.height = f"{100 - self._layout_state.query_height_pct}%"
+        except Exception:
+            pass
+
+    def _persist_layout(self) -> None:
+        """Write current layout to settings.json. Never raises (called from on_unmount)."""
+        try:
+            self.services.settings_store.set("layout", self._layout_state.to_dict())
+        except Exception:
+            pass
 
     def on_unmount(self) -> None:
         """Clean up background timers when the app exits."""
+        self._persist_layout()
         if self._idle_scheduler is not None:
             self._idle_scheduler.stop()
             self._idle_scheduler = None

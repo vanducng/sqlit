@@ -28,6 +28,8 @@ class UIStateProtocol(Protocol):
     _command_mode: bool
     _command_buffer: str
     _count_buffer: str
+    _layout_state: Any
+    _resize_mode_active: bool
     log: Any
 
 
@@ -71,6 +73,9 @@ class UINavigationActionsProtocol(Protocol):
     def _get_input_context(self) -> InputContext:
         ...
 
+    def _get_focus_pane(self) -> str:
+        ...
+
     def action_close_value_view(self) -> None:
         ...
 
@@ -78,6 +83,9 @@ class UINavigationActionsProtocol(Protocol):
         ...
 
     def _clear_count_buffer(self) -> None:
+        ...
+
+    def _apply_layout_state(self) -> None:
         ...
 
     @property
