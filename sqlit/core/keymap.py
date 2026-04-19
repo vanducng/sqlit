@@ -7,6 +7,10 @@ from dataclasses import dataclass
 
 from sqlit.shared.core.debug_events import emit_debug_event
 
+REBINDABLE_ACTIONS: frozenset[str] = frozenset(
+    {"focus_explorer", "focus_query", "focus_results"}
+)
+
 KEY_DISPLAY_OVERRIDES: dict[str, str] = {
     "question_mark": "?",
     "slash": "/",

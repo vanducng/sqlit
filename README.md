@@ -244,6 +244,26 @@ Connections and settings are stored in `$XDG_CONFIG_HOME/sqlit/` (default: `~/.c
 
 If an older install left files in `~/.sqlit/`, they are moved to the new location automatically on first run.
 
+### Customizing keybindings
+
+sqlit reads optional overrides from `$XDG_CONFIG_HOME/sqlit/settings.json` (default `~/.config/sqlit/settings.json`). To swap the pane-focus keys (`e` / `q` / `r` → `1` / `2` / `3`), add:
+
+```json
+{
+  "keymap": {
+    "overrides": {
+      "focus_explorer": "1",
+      "focus_query": "2",
+      "focus_results": "3"
+    }
+  }
+}
+```
+
+Shortcut: `sqlit config edit` opens the file in `$EDITOR`. Inspect resolved bindings with `sqlit config show-keymap` — overridden rows are flagged with `*`.
+
+Only pane-focus actions are rebindable today (`focus_explorer`, `focus_query`, `focus_results`). Other keys (vim motions, chords, leader menus) stay fixed by design.
+
 ## FAQ
 
 ### How are sensitive credentials stored?
