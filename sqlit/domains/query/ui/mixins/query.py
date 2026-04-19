@@ -18,6 +18,7 @@ from .query_editing_undo import QueryEditingUndoMixin
 from .query_editing_visual import QueryEditingVisualMixin
 from .query_editing_visual_line import QueryEditingVisualLineMixin
 from .query_execution import QueryExecutionMixin
+from .query_external_editor import QueryExternalEditorMixin
 from .query_results import QueryResultsMixin
 
 
@@ -31,6 +32,7 @@ class QueryMixin(
     QueryEditingClipboardMixin,
     QueryEditingCommentsMixin,
     QueryEditingCursorMixin,
+    QueryExternalEditorMixin,
     QueryExecutionMixin,
     QueryResultsMixin,
 ):

@@ -29,6 +29,8 @@ class QueryInsertModeState(State):
         # Undo/redo
         self.allows("undo", help="Undo")
         self.allows("redo", help="Redo")
+        # External editor
+        self.allows("edit_in_external_editor", label="Ext Editor", help="Open buffer in $EDITOR")
         self.forbids(
             "focus_explorer",
             "focus_results",
