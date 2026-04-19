@@ -88,11 +88,26 @@ def validate_connection_form(
 
     ssh_enabled = values.get("ssh_enabled") == "enabled"
     if ssh_enabled:
-        if not values.get("ssh_host"):
-            state.add_error("ssh_host", "Required.")
-        if not values.get("ssh_username"):
-            state.add_error("ssh_username", "Required.")
-        if values.get("ssh_auth_type") == "key" and not values.get("ssh_key_path"):
-            state.add_error("ssh_key_path", "Required for key authentication.")
+        source = values.get("ssh_source", "manual")
+        if source == "config":
+            alias = (values.get("ssh_config_alias") or "").strip()
+            if not alias:
+                state.add_error("ssh_config_alias", "Required.")
+            else:
+                try:
+                    from sqlit.domains.connections.app.ssh_config import list_aliases
+
+                    known = {a.name for a in list_aliases()}
+                    if known and alias not in known:
+                        state.add_error("ssh_config_alias", "Alias not found in ~/.ssh/config.")
+                except Exception:
+                    pass
+        else:
+            if not values.get("ssh_host"):
+                state.add_error("ssh_host", "Required.")
+            if not values.get("ssh_username"):
+                state.add_error("ssh_username", "Required.")
+            if values.get("ssh_auth_type") == "key" and not values.get("ssh_key_path"):
+                state.add_error("ssh_key_path", "Required for key authentication.")
 
     return state

@@ -141,6 +141,8 @@ class FileEndpoint:
 @dataclass
 class TunnelConfig:
     enabled: bool = False
+    source: str = "manual"  # "manual" | "config"
+    config_alias: str = ""
     host: str = ""
     port: str = "22"
     username: str = ""
@@ -218,16 +220,27 @@ class ConnectionConfig:
         if isinstance(tunnel_data, dict):
             enabled = bool(tunnel_data.get("enabled", False))
             if enabled:
-                tunnel = TunnelConfig(
-                    enabled=True,
-                    host=str(tunnel_data.get("host", "")),
-                    port=str(tunnel_data.get("port", "22")),
-                    username=str(tunnel_data.get("username", "")),
-                    auth_type=str(tunnel_data.get("auth_type", "key")),
-                    password=tunnel_data.get("password", None),
-                    password_command=tunnel_data.get("password_command", None),
-                    key_path=str(tunnel_data.get("key_path", "")),
-                )
+                source = str(tunnel_data.get("source", "manual"))
+                if source not in {"manual", "config"}:
+                    source = "manual"
+                if source == "config":
+                    tunnel = TunnelConfig(
+                        enabled=True,
+                        source="config",
+                        config_alias=str(tunnel_data.get("config_alias", "")),
+                    )
+                else:
+                    tunnel = TunnelConfig(
+                        enabled=True,
+                        source="manual",
+                        host=str(tunnel_data.get("host", "")),
+                        port=str(tunnel_data.get("port", "22")),
+                        username=str(tunnel_data.get("username", "")),
+                        auth_type=str(tunnel_data.get("auth_type", "key")),
+                        password=tunnel_data.get("password", None),
+                        password_command=tunnel_data.get("password_command", None),
+                        key_path=str(tunnel_data.get("key_path", "")),
+                    )
         else:
             ssh_enabled = payload.pop("ssh_enabled", None)
             ssh_host = str(payload.pop("ssh_host", ""))
@@ -321,18 +334,28 @@ class ConnectionConfig:
             )
 
         if self.tunnel and self.tunnel.enabled:
-            values.update(
-                {
-                    "ssh_enabled": "enabled",
-                    "ssh_host": self.tunnel.host,
-                    "ssh_port": self.tunnel.port,
-                    "ssh_username": self.tunnel.username,
-                    "ssh_auth_type": self.tunnel.auth_type,
-                    "ssh_password": self.tunnel.password,
-                    "ssh_password_command": self.tunnel.password_command,
-                    "ssh_key_path": self.tunnel.key_path,
-                }
-            )
+            if self.tunnel.source == "config":
+                values.update(
+                    {
+                        "ssh_enabled": "enabled",
+                        "ssh_source": "config",
+                        "ssh_config_alias": self.tunnel.config_alias,
+                    }
+                )
+            else:
+                values.update(
+                    {
+                        "ssh_enabled": "enabled",
+                        "ssh_source": "manual",
+                        "ssh_host": self.tunnel.host,
+                        "ssh_port": self.tunnel.port,
+                        "ssh_username": self.tunnel.username,
+                        "ssh_auth_type": self.tunnel.auth_type,
+                        "ssh_password": self.tunnel.password,
+                        "ssh_password_command": self.tunnel.password_command,
+                        "ssh_key_path": self.tunnel.key_path,
+                    }
+                )
         else:
             values["ssh_enabled"] = "disabled"
 
@@ -372,18 +395,26 @@ class ConnectionConfig:
             data["endpoint"] = endpoint_dict
 
         if self.tunnel and self.tunnel.enabled:
-            tunnel_dict: dict[str, Any] = {
-                "enabled": True,
-                "host": self.tunnel.host,
-                "port": self.tunnel.port,
-                "username": self.tunnel.username,
-                "auth_type": self.tunnel.auth_type,
-                "password": self.tunnel.password if include_passwords else None,
-                "key_path": self.tunnel.key_path,
-            }
-            if self.tunnel.password_command:
-                tunnel_dict["password_command"] = self.tunnel.password_command
-            data["tunnel"] = tunnel_dict
+            if self.tunnel.source == "config":
+                data["tunnel"] = {
+                    "enabled": True,
+                    "source": "config",
+                    "config_alias": self.tunnel.config_alias,
+                }
+            else:
+                tunnel_dict: dict[str, Any] = {
+                    "enabled": True,
+                    "source": "manual",
+                    "host": self.tunnel.host,
+                    "port": self.tunnel.port,
+                    "username": self.tunnel.username,
+                    "auth_type": self.tunnel.auth_type,
+                    "password": self.tunnel.password if include_passwords else None,
+                    "key_path": self.tunnel.key_path,
+                }
+                if self.tunnel.password_command:
+                    tunnel_dict["password_command"] = self.tunnel.password_command
+                data["tunnel"] = tunnel_dict
         else:
             data["tunnel"] = {"enabled": False}
 
