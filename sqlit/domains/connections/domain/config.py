@@ -6,6 +6,28 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+from urllib.parse import urlparse, urlunparse
+
+
+def _scrub_url_password(url: str | None) -> str | None:
+    """Strip the password from a URL's userinfo while keeping username + host.
+
+    Returns the URL unchanged when there is no password component or when
+    parsing fails (defensive — never re-raise, never leak the secret).
+    """
+    if not url:
+        return url
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return None  # malformed URL; safer to drop than to leak
+    if not parsed.password:
+        return url
+    host = parsed.hostname or ""
+    if parsed.port is not None:
+        host = f"{host}:{parsed.port}"
+    netloc = f"{parsed.username}@{host}" if parsed.username else host
+    return urlunparse(parsed._replace(netloc=netloc))
 
 
 class DatabaseType(str, Enum):
@@ -318,11 +340,14 @@ class ConnectionConfig:
         return values
 
     def to_dict(self, *, include_passwords: bool = True) -> dict[str, Any]:
+        connection_url = (
+            self.connection_url if include_passwords else _scrub_url_password(self.connection_url)
+        )
         data: dict[str, Any] = {
             "name": self.name,
             "db_type": self.db_type,
             "source": self.source,
-            "connection_url": self.connection_url,
+            "connection_url": connection_url,
             "folder_path": self.folder_path,
             "extra_options": dict(self.extra_options),
             "options": dict(self.options),

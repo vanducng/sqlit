@@ -40,7 +40,7 @@
           cockroachdb = [ pyPkgs.psycopg2 ];
           mysql = [ pyPkgs.pymysql ];
           duckdb = [ pyPkgs.duckdb ];
-          bigquery = [ pyPkgs.google-cloud-bigquery ];
+          bigquery = [ pyPkgs.google-cloud-bigquery pyPkgs.google-cloud-bigquery-storage pyPkgs.pyarrow ];
           snowflake = [ pyPkgs.snowflake-connector-python ];
           d1 = [ pyPkgs.requests ];
         };

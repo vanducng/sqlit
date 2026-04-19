@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from typing import Any
 
@@ -89,43 +90,99 @@ def _save_connections(services: AppServices, connections: list[ConnectionConfig]
         print(f"Warning: {exc}", file=sys.stderr)
 
 
+def _summarize_connection(conn: ConnectionConfig, services: AppServices) -> dict[str, Any]:
+    """Derive human-readable + structured summary fields for one connection."""
+    labels = get_database_type_labels()
+    db_type_label = labels.get(conn.get_db_type(), conn.db_type)
+    provider = services.provider_factory(conn.db_type)
+    summary: dict[str, Any] = {
+        "name": conn.name,
+        "db_type": conn.db_type,
+        "db_type_label": db_type_label,
+        "is_file_based": provider.metadata.is_file_based,
+        "host": "",
+        "port": "",
+        "database": "",
+        "username": "",
+        "file_path": "",
+        "auth_label": "N/A",
+        "ssh_tunnel": False,
+        "ssh_host": "",
+        "source": conn.source or "",
+        "folder_path": conn.folder_path or "",
+    }
+    if provider.metadata.is_file_based:
+        file_endpoint = conn.file_endpoint
+        summary["file_path"] = str(file_endpoint.path) if file_endpoint else ""
+    else:
+        endpoint = conn.tcp_endpoint
+        if endpoint:
+            summary["host"] = endpoint.host
+            summary["port"] = endpoint.port
+            summary["database"] = endpoint.database
+            summary["username"] = endpoint.username
+        if provider.metadata.has_advanced_auth:
+            auth_value = str(conn.get_option("auth_type", ""))
+            auth_type = provider.get_auth_type(conn)
+            summary["auth_label"] = AUTH_TYPE_LABELS.get(auth_type, auth_value) if auth_type else auth_value
+        elif endpoint and endpoint.username:
+            summary["auth_label"] = f"User: {endpoint.username}"
+    if conn.tunnel and conn.tunnel.enabled:
+        summary["ssh_tunnel"] = True
+        summary["ssh_host"] = conn.tunnel.host
+    return summary
+
+
+def _connection_info_str(s: dict[str, Any]) -> str:
+    if s["is_file_based"]:
+        return str(s["file_path"])
+    host = str(s["host"])
+    port = str(s["port"])
+    db = str(s["database"])
+    base = f"{host}:{port}" if port else host
+    return f"{base}/{db}" if db else base
+
+
 def cmd_connection_list(args: Any, *, services: AppServices | None = None) -> int:
     """List all saved connections."""
     services = services or build_app_services(RuntimeConfig.from_env())
-    connections = services.connection_store.load_all()
+    connections = services.connection_store.load_all(load_credentials=False)
+
+    fmt = getattr(args, "format", "table")
+    verbose = bool(getattr(args, "verbose", False))
+
+    if fmt == "json":
+        payload = []
+        for conn in connections:
+            entry = conn.to_dict(include_passwords=False)
+            entry["summary"] = _summarize_connection(conn, services)
+            payload.append(entry)
+        print(json.dumps(payload, indent=2, default=str))
+        return 0
+
     if not connections:
         print("No saved connections.")
         return 0
 
-    print(f"{'Name':<20} {'Type':<10} {'Connection Info':<40} {'Auth Type':<25}")
-    print("-" * 95)
-    labels = get_database_type_labels()
-    for conn in connections:
-        db_type_label = labels.get(conn.get_db_type(), conn.db_type)
-        provider = services.provider_factory(conn.db_type)
-        if provider.metadata.is_file_based:
-            file_endpoint = conn.file_endpoint
-            file_path = str(file_endpoint.path if file_endpoint else "")
-            conn_info = file_path[:38] + ".." if len(file_path) > 40 else file_path
-            auth_label = "N/A"
-        elif provider.metadata.has_advanced_auth:
-            endpoint = conn.tcp_endpoint
-            host = endpoint.host if endpoint else ""
-            database = endpoint.database if endpoint else ""
-            conn_info = f"{host}@{database}" if database else host
-            conn_info = conn_info[:38] + ".." if len(conn_info) > 40 else conn_info
-            auth_value = str(conn.get_option("auth_type", ""))
-            auth_type = provider.get_auth_type(conn)
-            auth_label = AUTH_TYPE_LABELS.get(auth_type, auth_value) if auth_type else auth_value
-        else:
-            # Server-based databases with simple auth
-            endpoint = conn.tcp_endpoint
-            host = endpoint.host if endpoint else ""
-            database = endpoint.database if endpoint else ""
-            conn_info = f"{host}@{database}" if database else host
-            conn_info = conn_info[:38] + ".." if len(conn_info) > 40 else conn_info
-            auth_label = f"User: {endpoint.username}" if endpoint and endpoint.username else "N/A"
-        print(f"{conn.name:<20} {db_type_label:<10} {conn_info:<40} {auth_label:<25}")
+    summaries = [_summarize_connection(conn, services) for conn in connections]
+    name_w = max(20, max(len(s["name"]) for s in summaries))
+    type_w = max(15, max(len(s["db_type_label"]) for s in summaries))
+    info_w = max(40, max(len(_connection_info_str(s)) for s in summaries))
+    auth_w = max(20, max(len(s["auth_label"]) for s in summaries))
+
+    if verbose:
+        header = f"{'Name':<{name_w}}  {'Type':<{type_w}}  {'Connection Info':<{info_w}}  {'Auth':<{auth_w}}  SSH      Source"
+    else:
+        header = f"{'Name':<{name_w}}  {'Type':<{type_w}}  {'Connection Info':<{info_w}}  {'Auth':<{auth_w}}"
+    print(header)
+    print("-" * len(header))
+    for s in summaries:
+        info = _connection_info_str(s)
+        line = f"{s['name']:<{name_w}}  {s['db_type_label']:<{type_w}}  {info:<{info_w}}  {s['auth_label']:<{auth_w}}"
+        if verbose:
+            ssh = f"{s['ssh_host']}" if s["ssh_tunnel"] else "-"
+            line += f"  {ssh:<7}  {s['source']}"
+        print(line)
     return 0
 
 
