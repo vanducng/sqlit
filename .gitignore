@@ -72,3 +72,5 @@ tests/integration/drivers/
 __pycache__/
 
 plans/
+
+docs/journals
