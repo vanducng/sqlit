@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from typing import Any
 
@@ -144,8 +145,6 @@ def _connection_info_str(s: dict[str, Any]) -> str:
 
 def cmd_connection_list(args: Any, *, services: AppServices | None = None) -> int:
     """List all saved connections."""
-    import json as _json
-
     services = services or build_app_services(RuntimeConfig.from_env())
     connections = services.connection_store.load_all(load_credentials=False)
 
@@ -158,7 +157,7 @@ def cmd_connection_list(args: Any, *, services: AppServices | None = None) -> in
             entry = conn.to_dict(include_passwords=False)
             entry["summary"] = _summarize_connection(conn, services)
             payload.append(entry)
-        print(_json.dumps(payload, indent=2, default=str))
+        print(json.dumps(payload, indent=2, default=str))
         return 0
 
     if not connections:
