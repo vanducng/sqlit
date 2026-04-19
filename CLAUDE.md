@@ -91,4 +91,4 @@ Adding a new database means: drop a package under `sqlit/domains/connections/pro
 - Many `S*` bandit rules are ignored because this is a SQL tool and a CLI: raw SQL strings (`S608`), `subprocess` without shell (`S603`), partial executable paths (`S607`), and `os.execv` for restart (`S606`) are all expected. Don't "fix" them.
 - `try/except: pass` is used deliberately to keep the TUI from crashing; `S110` and `SIM105` are ignored. Don't replace with `contextlib.suppress` for style.
 - Vision / scope (see `CONTRIBUTING.md` "Vision" section): every feature must serve **C**onnect / **E**xplore / **Q**uery / **R**esults and be **E**asy/**A**esthetic/**F**un/**F**ast. Settings/toggles/preferences are avoided by design — don't add feature flags. Advanced features go behind `<space>` leader or `?` help, never on the main toolbar.
-- Keybindings favor vim tradition; `Ctrl+` is reserved for places without insert/normal modal context (modals). First-letter mnemonics for pane focus (`e`/`q`/`r`).
+- Keybindings favor vim tradition; `Ctrl+` is reserved for places without insert/normal modal context (modals). 

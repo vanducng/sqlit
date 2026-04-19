@@ -72,3 +72,6 @@ tests/integration/drivers/
 __pycache__/
 
 plans/*
+# Plan reports are ephemeral; brainstorm handoffs are tracked
+!plans/*.md
+plans/reports/

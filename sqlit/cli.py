@@ -583,13 +583,6 @@ def main() -> int:
     with startup_span("runtime_build"):
         runtime = _build_runtime(args, startup_mark)
 
-    # Load user keymap override (if SQLIT_KEYMAP_MODULE is set) before any
-    # service consults the global keymap, so emitted binding snapshots
-    # reflect the user's overrides.
-    with startup_span("keymap_bootstrap"):
-        from sqlit.core.keymap_bootstrap import bootstrap_user_keymap
-        bootstrap_user_keymap()
-
     with startup_span("services_build"):
         services = build_app_services(runtime)
     if args.command is None:
