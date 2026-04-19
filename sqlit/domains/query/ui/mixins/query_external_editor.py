@@ -17,7 +17,7 @@ class QueryExternalEditorMixin:
     """Handler for `edit_in_external_editor` (bound to `Ctrl+G`)."""
 
     def action_edit_in_external_editor(self: QueryMixinHost) -> None:
-        if getattr(self, "_query_worker", None) is not None:
+        if getattr(self, "query_executing", False):
             self.notify("Cannot edit externally while a query is running", severity="warning")
             return
 
