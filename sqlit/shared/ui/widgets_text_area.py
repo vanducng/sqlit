@@ -142,6 +142,11 @@ class QueryTextArea(TextArea):
         """Intercept clipboard, undo/redo, and Enter keys."""
         normalized_key = self._normalize_key(event.key)
 
+        # Timed chord sequences (e.g. vim 'jk' -> <esc>) are dispatched via
+        # the central ChordResolver so new chords only need a keymap entry.
+        if self._try_dispatch_chord(event, normalized_key):
+            return
+
         # Clipboard shortcuts only work in INSERT mode (vim consistency)
         if normalized_key in ("ctrl+a", "ctrl+c", "ctrl+v"):
             if not self._is_insert_mode():
@@ -211,6 +216,44 @@ class QueryTextArea(TextArea):
 
         # For all other keys, use default TextArea behavior
         await super()._on_key(event)
+
+    def _try_dispatch_chord(self, event: Key, normalized_key: str) -> bool:
+        """Route the key through the global ChordResolver.
+
+        Returns True if the key triggered a chord match and was consumed by
+        this method (caller should stop further processing). Returns False
+        if no match fired — caller must continue normal key handling.
+
+        The resolver is consulted BEFORE the TextArea inserts the key, so we
+        can prevent the terminal key of a matching chord from landing in the
+        buffer. Preceding keys already inserted by prior `_on_key` calls are
+        rolled back via `delete_chars` on the match.
+        """
+        from sqlit.core.chord_resolver import get_chord_resolver
+
+        app = self.app
+        build_ctx = getattr(app, "_get_input_context", None)
+        if build_ctx is None:
+            return False
+
+        match = get_chord_resolver().feed(normalized_key, build_ctx())
+        if match is None:
+            return False
+
+        # Roll back any preceding chord characters the user has already typed.
+        for _ in range(match.delete_chars):
+            try:
+                self.action_delete_left()
+            except Exception:
+                break
+
+        event.prevent_default()
+        event.stop()
+        action_name = f"action_{match.action}"
+        action = getattr(app, action_name, None)
+        if callable(action):
+            action()
+        return True
 
     def _is_visual_mode(self) -> bool:
         """Check if app is in any vim visual mode."""
