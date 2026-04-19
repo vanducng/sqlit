@@ -196,20 +196,21 @@ class UINavigationMixin(UIStatusMixin, UILeaderMixin):
         return None
 
     def _do_resize(self: UINavigationMixinHost, direction: str) -> None:
-        """Resize the focused pane. No-op in any text-input context where arrow
-        keys carry caret-movement semantics (query INSERT, tree filter input,
-        results filter input). Protects user-rebound ctrl+arrow from stealing
-        word-nav inside text fields."""
+        """Resize the focused pane. No-op when focus is in a text-input context
+        where arrow keys carry caret-movement semantics — protects user-rebound
+        ctrl+arrow from stealing word-nav. Guards are scoped to the pane that
+        owns each input: tree filter only blocks when focus is in the sidebar,
+        results filter only when focus is in results, INSERT only when in query."""
         from sqlit.core.vim import VimMode
 
-        if self.vim_mode == VimMode.INSERT and self._get_focus_pane() == "query":
-            return
-        if getattr(self, "_tree_filter_visible", False):
-            return
-        if getattr(self, "_results_filter_visible", False):
-            return
         pane = self._resolve_focused_pane()
         if pane is None:
+            return
+        if pane == "query" and self.vim_mode == VimMode.INSERT:
+            return
+        if pane == "sidebar" and getattr(self, "_tree_filter_visible", False):
+            return
+        if pane == "results" and getattr(self, "_results_filter_visible", False):
             return
         if self._layout_state.adjust(pane, direction):
             self._apply_layout_state()

@@ -228,7 +228,7 @@ Use with operators like `y`, `d`, `c` (e.g. `dw`, `y$`).
 | `<space>z` | Cancel running query |
 | `<space>e` | Toggle Explorer |
 | `<space>f` | Toggle Maximize |
-| `<space>r` | Resize panes (then `←↑↓→`; any other key exits) |
+| `<space>r` | Resize panes (then plain `←↑↓→`; any other key — incl. `Shift`/`Alt`+arrow — exits) |
 | `<space>t` | Change theme |
 | `<space>ga` / `<space>gr` | Run **all** statements in the buffer |
 | `<space>gs` | Run statement at cursor (same as `Enter`) |

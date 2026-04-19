@@ -129,8 +129,8 @@ class TestInsertModeGuard:
             assert app._layout_state.query_height_pct == before
 
     @pytest.mark.asyncio
-    async def test_tree_filter_blocks_resize(self):
-        """Active tree-filter input must block resize so / + arrows still navigates filter."""
+    async def test_tree_filter_blocks_resize_when_focused_in_sidebar(self):
+        """Active tree-filter input must block resize when focus is in sidebar."""
         app = _make_app()
         async with app.run_test(size=(120, 40)) as pilot:
             app.action_focus_explorer()
@@ -142,8 +142,21 @@ class TestInsertModeGuard:
             assert app._layout_state.sidebar_width == before
 
     @pytest.mark.asyncio
-    async def test_results_filter_blocks_resize(self):
-        """Active results-filter input must block resize."""
+    async def test_tree_filter_does_not_block_other_panes(self):
+        """Tree filter open in sidebar must NOT block resize when focus is in query."""
+        app = _make_app()
+        async with app.run_test(size=(120, 40)) as pilot:
+            app._tree_filter_visible = True  # filter open in sidebar
+            app.action_focus_query()  # but focus is in query
+            await pilot.pause()
+            before = app._layout_state.query_height_pct
+            app.action_resize_pane_down()
+            await pilot.pause()
+            assert app._layout_state.query_height_pct == before + 2
+
+    @pytest.mark.asyncio
+    async def test_results_filter_blocks_resize_when_focused_in_results(self):
+        """Active results-filter input must block resize when focus is in results."""
         app = _make_app()
         async with app.run_test(size=(120, 40)) as pilot:
             app.action_focus_results()
@@ -153,6 +166,19 @@ class TestInsertModeGuard:
             app.action_resize_pane_up()
             await pilot.pause()
             assert app._layout_state.query_height_pct == before
+
+    @pytest.mark.asyncio
+    async def test_results_filter_does_not_block_other_panes(self):
+        """Results filter open must NOT block sidebar resize."""
+        app = _make_app()
+        async with app.run_test(size=(120, 40)) as pilot:
+            app._results_filter_visible = True
+            app.action_focus_explorer()
+            await pilot.pause()
+            before = app._layout_state.sidebar_width
+            app.action_resize_pane_right()
+            await pilot.pause()
+            assert app._layout_state.sidebar_width == before + 2
 
 
 class TestModalClearsResizeMode:
