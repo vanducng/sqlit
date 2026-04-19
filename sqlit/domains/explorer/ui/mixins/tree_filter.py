@@ -177,18 +177,19 @@ class TreeFilterMixin:
 
     def on_paste(self: TreeFilterMixinHost, event: Any) -> None:
         """Append clipboard content to the filter when it is active."""
-        if not (self._tree_filter_visible and self._tree_filter_typing):
+        text = getattr(event, "text", "") or ""
+        # Filter is single-line; flatten pasted newlines to spaces
+        flat = text.replace("\r", "").replace("\n", " ").strip()
+        # If filter inactive OR paste is empty/whitespace-only, bubble to
+        # parent so other handlers (or default behavior) can react.
+        if not (self._tree_filter_visible and self._tree_filter_typing) or not flat:
             parent = getattr(super(), "on_paste", None)
             if callable(parent):
                 parent(event)
             return
 
-        text = getattr(event, "text", "") or ""
-        # Filter is single-line; flatten pasted newlines to spaces
-        flat = text.replace("\r", "").replace("\n", " ").strip()
-        if flat:
-            self._tree_filter_text += flat
-            self._update_tree_filter()
+        self._tree_filter_text += flat
+        self._update_tree_filter()
         event.prevent_default()
         event.stop()
 

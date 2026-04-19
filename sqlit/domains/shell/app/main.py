@@ -433,7 +433,7 @@ class SSMSTUI(
         if ctx.modal_open:
             # Clear resize mode if a modal opens — otherwise the flag would persist
             # silently across modal dismissal and surprise the next keypress.
-            self._resize_mode_active = False
+            self._clear_resize_mode()
             if event.key in {"escape", "enter"}:
                 self.emit_debug_event(
                     "key.modal",
@@ -456,7 +456,7 @@ class SSMSTUI(
                 event.prevent_default()
                 event.stop()
                 return
-            self._resize_mode_active = False
+            self._clear_resize_mode()
             # Fall through so the non-arrow key dispatches normally
 
         if self._handle_command_input(event, ctx):

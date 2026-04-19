@@ -293,17 +293,18 @@ class ResultsFilterMixin:
 
     def on_paste(self: ResultsFilterMixinHost, event: Any) -> None:
         """Append clipboard content to the results filter when active."""
-        if not self._results_filter_visible:
+        text = getattr(event, "text", "") or ""
+        flat = text.replace("\r", "").replace("\n", " ").strip()
+        # If filter inactive OR paste is empty/whitespace-only, bubble to
+        # parent so other handlers can react instead of silently consuming.
+        if not self._results_filter_visible or not flat:
             parent = getattr(super(), "on_paste", None)
             if callable(parent):
                 parent(event)
             return
 
-        text = getattr(event, "text", "") or ""
-        flat = text.replace("\r", "").replace("\n", " ").strip()
-        if flat:
-            self._results_filter_text += flat
-            self._schedule_filter_update()
+        self._results_filter_text += flat
+        self._schedule_filter_update()
         event.prevent_default()
         event.stop()
 

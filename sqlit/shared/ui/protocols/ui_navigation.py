@@ -88,6 +88,9 @@ class UINavigationActionsProtocol(Protocol):
     def _apply_layout_state(self) -> None:
         ...
 
+    def _clear_resize_mode(self) -> None:
+        ...
+
     @property
     def idle_scheduler_bar(self) -> Static:
         ...

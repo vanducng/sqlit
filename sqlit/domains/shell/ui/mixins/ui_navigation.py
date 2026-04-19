@@ -23,11 +23,32 @@ class UINavigationMixin(UIStatusMixin, UILeaderMixin):
     _last_active_pane: str | None = None
 
     def _set_fullscreen_mode(self: UINavigationMixinHost, mode: str) -> None:
-        """Set fullscreen mode: none|explorer|query|results."""
+        """Set fullscreen mode: none|explorer|query|results.
+
+        Inline sizes stamped by ``_apply_layout_state`` outrank CSS class rules
+        in Textual, so the ``*-fullscreen`` classes cannot grow the surviving
+        pane while inline width/height remain. Null them out on enter and
+        re-stamp from ``LayoutState`` on exit.
+        """
         self._fullscreen_mode = mode
         self.screen.remove_class("results-fullscreen")
         self.screen.remove_class("query-fullscreen")
         self.screen.remove_class("explorer-fullscreen")
+
+        if mode == "none":
+            self._apply_layout_state()
+            return
+
+        for selector, prop in (
+            ("#sidebar", "width"),
+            ("#query-area", "height"),
+            ("#results-area", "height"),
+        ):
+            try:
+                widget = self.query_one(selector)
+                setattr(widget.styles, prop, None)
+            except Exception:
+                pass
 
         if mode == "results":
             self.screen.add_class("results-fullscreen")
@@ -231,6 +252,15 @@ class UINavigationMixin(UIStatusMixin, UILeaderMixin):
         """Enter resize mode: arrow keys resize, any other key exits."""
         self._resize_mode_active = True
         self.notify("RESIZE — ← ↑ ↓ → to resize, any other key exits", timeout=3)
+
+    def _clear_resize_mode(self: UINavigationMixinHost) -> None:
+        """Single point to drop the resize-mode flag.
+
+        Called from on_key when a non-arrow key arrives while in resize mode,
+        and from the modal_open early-return so a modal opening mid-resize
+        doesn't trap the flag indefinitely.
+        """
+        self._resize_mode_active = False
 
     def action_toggle_process_worker(self: UINavigationMixinHost) -> None:
         """Toggle the process worker setting."""

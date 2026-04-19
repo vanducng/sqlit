@@ -311,10 +311,12 @@ class ConnectionPickerScreen(ModalScreen):
             return
         text = getattr(event, "text", "") or ""
         flat = text.replace("\r", "").replace("\n", " ").strip()
-        if flat:
-            self._filter_state.text += flat
-            self._update_filter_display()
-            self._update_list()
+        if not flat:
+            # Empty/whitespace-only paste — let it bubble rather than swallow.
+            return
+        self._filter_state.text += flat
+        self._update_filter_display()
+        self._update_list()
         event.prevent_default()
         event.stop()
 

@@ -190,6 +190,16 @@ class TestResultsFilterPaste:
         ResultsFilterMixin.on_paste(f, event)
         assert f._results_filter_text == ""
 
+    def test_paste_empty_bubbles_up(self):
+        f = _ResultsFilterFake(rows=5)
+        f._results_filter_visible = True
+        event = _PasteEvent("\n\n  ")
+        ResultsFilterMixin.on_paste(f, event)
+        # Empty paste bubbles to parent rather than being silently consumed
+        assert f._results_filter_text == ""
+        assert event.prevented is False
+        assert event.stopped is False
+
 
 class _TreeFilterFake(TreeFilterMixin):
     def __init__(self, *, visible: bool, typing: bool, text: str = "") -> None:
@@ -217,6 +227,23 @@ class TestTreeFilterPaste:
         TreeFilterMixin.on_paste(f, event)
         assert f._tree_filter_text == "untouched"
         assert f._updated is False
+
+    def test_paste_collapses_multiline_to_spaces(self):
+        f = _TreeFilterFake(visible=True, typing=True, text="")
+        event = _PasteEvent("foo\nbar\r\nbaz")
+        TreeFilterMixin.on_paste(f, event)
+        assert f._tree_filter_text == "foo bar baz"
+        assert f._updated is True
+
+    def test_paste_empty_bubbles_up(self):
+        """Empty/whitespace-only paste must not be silently swallowed."""
+        f = _TreeFilterFake(visible=True, typing=True, text="kept")
+        event = _PasteEvent("   \n   ")
+        TreeFilterMixin.on_paste(f, event)
+        # Filter text unchanged, event NOT prevented (bubbles to parent)
+        assert f._tree_filter_text == "kept"
+        assert event.prevented is False
+        assert event.stopped is False
 
 
 class TestConnectionPickerPaste:

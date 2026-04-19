@@ -92,6 +92,21 @@ class TestPersistRoundTrip:
         saved = store.get("layout", {})
         assert saved == {"sidebar_width": 42, "query_height_pct": 60}
 
+    @pytest.mark.asyncio
+    async def test_on_unmount_persists_layout(self):
+        """The full mount→unmount lifecycle must write layout to settings."""
+        store = MockSettingsStore({"theme": "tokyo-night"})
+        services = build_test_services(
+            connection_store=MockConnectionStore(),
+            settings_store=store,
+        )
+        app = SSMSTUI(services=services)
+        async with app.run_test(size=(120, 40)):
+            app._layout_state = LayoutState(sidebar_width=44, query_height_pct=66)
+        # After exiting `run_test`, on_unmount has fired
+        saved = store.get("layout", {})
+        assert saved == {"sidebar_width": 44, "query_height_pct": 66}
+
     def test_round_trip_via_new_instance(self):
         store = MockSettingsStore({"theme": "tokyo-night"})
         services1 = build_test_services(
@@ -200,6 +215,41 @@ class TestModalClearsResizeMode:
             # Send any key — on_key sees modal_open and clears the flag
             await pilot.press("a")
             await pilot.pause()
+            assert app._resize_mode_active is False
+
+
+class TestResizeModeExitFallthrough:
+    @pytest.mark.asyncio
+    async def test_space_after_resize_re_enters_leader(self):
+        """`<space>r` then `<space>` exits resize and re-arms leader."""
+        keymap = get_keymap()
+        leader_key = keymap.action("leader_key")
+        app = _make_app()
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.press(leader_key, "r")
+            await pilot.pause()
+            assert app._resize_mode_active is True
+            # Press leader again — exits resize mode AND re-arms leader pending
+            await pilot.press(leader_key)
+            await pilot.pause()
+            assert app._resize_mode_active is False
+            assert app._leader_pending is True
+
+    @pytest.mark.asyncio
+    async def test_modifier_arrow_exits_resize_without_resizing(self):
+        """`shift+left` is not a plain arrow → exits resize, sidebar unchanged."""
+        keymap = get_keymap()
+        leader_key = keymap.action("leader_key")
+        app = _make_app()
+        async with app.run_test(size=(120, 40)) as pilot:
+            app.action_focus_explorer()
+            await pilot.pause()
+            before = app._layout_state.sidebar_width
+            await pilot.press(leader_key, "r")
+            await pilot.pause()
+            await pilot.press("shift+left")
+            await pilot.pause()
+            assert app._layout_state.sidebar_width == before
             assert app._resize_mode_active is False
 
 
