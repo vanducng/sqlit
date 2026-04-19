@@ -428,6 +428,8 @@ class DefaultKeymapProvider(KeymapProvider):
             ActionKeyDef("x", "delete_char", "query_normal"),
             ActionKeyDef("a", "append_insert_mode", "query_normal"),
             ActionKeyDef("A", "append_line_end", "query_normal"),
+            # External editor (waives "Ctrl+ reserved for non-modal" convention by design).
+            ActionKeyDef("ctrl+g", "edit_in_external_editor", "query_normal"),
             # Query (visual mode - charwise)
             ActionKeyDef("escape", "exit_visual_mode", "query_visual"),
             ActionKeyDef("v", "exit_visual_mode", "query_visual", primary=False),
@@ -478,6 +480,7 @@ class DefaultKeymapProvider(KeymapProvider):
             ActionKeyDef("escape", "exit_insert_mode", "query_insert"),
             ActionKeyDef("ctrl+enter", "execute_single_statement_insert", "query_insert"),
             ActionKeyDef("tab", "autocomplete_accept", "query_insert"),
+            ActionKeyDef("ctrl+g", "edit_in_external_editor", "query_insert"),
             # Navigation
             ActionKeyDef("e", "focus_explorer", "navigation"),
             ActionKeyDef("q", "focus_query", "navigation"),
