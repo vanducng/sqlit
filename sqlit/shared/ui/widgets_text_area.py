@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, cast
 
 from rich.segment import Segment
@@ -25,6 +26,13 @@ class QueryTextArea(TextArea):
     _stmt_range_text: str = ""
     _stmt_range_cursor: tuple[int, int] = (-1, -1)
     _active_statement_line_range: tuple[int, int] | None = None
+
+    # Pending state for a timed key-sequence (ChordDef) in progress. The
+    # resolver is inlined here rather than in a shared module — there is
+    # currently one consumer (the `jk` -> <esc> chord), so a separate
+    # engine would be speculative. Revisit if a second call site appears.
+    _chord_buffer: tuple[str, ...] = ()
+    _chord_deadline: float = 0.0
 
     # Normalize OS-variant shortcuts to canonical forms
     # Maps: super → ctrl for common operations, strips shift where irrelevant
@@ -218,42 +226,77 @@ class QueryTextArea(TextArea):
         await super()._on_key(event)
 
     def _try_dispatch_chord(self, event: Key, normalized_key: str) -> bool:
-        """Route the key through the global ChordResolver.
+        """Resolve timed key-sequence chords defined on the keymap provider.
 
-        Returns True if the key triggered a chord match and was consumed by
-        this method (caller should stop further processing). Returns False
-        if no match fired — caller must continue normal key handling.
+        Only chords whose declared `context` is currently active (as
+        reported by `app._get_input_context()` + `get_binding_contexts`) are
+        considered. On a full match the preceding chord characters that
+        have already been inserted are rolled back with `action_delete_left`
+        and the mapped action is dispatched on the app.
 
-        The resolver is consulted BEFORE the TextArea inserts the key, so we
-        can prevent the terminal key of a matching chord from landing in the
-        buffer. Preceding keys already inserted by prior `_on_key` calls are
-        rolled back via `delete_chars` on the match.
+        Returns True if the key was consumed by a chord match (caller must
+        stop further processing); False otherwise.
         """
-        from sqlit.core.chord_resolver import get_chord_resolver
+        from sqlit.core.action_validation import evaluate_chord_guard
+        from sqlit.core.binding_contexts import get_binding_contexts
+        from sqlit.core.keymap import get_keymap
 
         app = self.app
         build_ctx = getattr(app, "_get_input_context", None)
         if build_ctx is None:
             return False
 
-        match = get_chord_resolver().feed(normalized_key, build_ctx())
-        if match is None:
+        ctx = build_ctx()
+        active = get_binding_contexts(ctx)
+        candidates = [
+            c for c in get_keymap().get_chords()
+            if c.context in active and evaluate_chord_guard(c.guard, ctx)
+        ]
+        if not candidates:
+            if self._chord_buffer:
+                self._reset_chord_buffer()
             return False
 
-        # Roll back any preceding chord characters the user has already typed.
-        for _ in range(match.delete_chars):
-            try:
-                self.action_delete_left()
-            except Exception:
-                break
+        # Drop stale pending state on timeout.
+        now = time.monotonic()
+        if self._chord_buffer and now > self._chord_deadline:
+            self._reset_chord_buffer()
 
-        event.prevent_default()
-        event.stop()
-        action_name = f"action_{match.action}"
-        action = getattr(app, action_name, None)
-        if callable(action):
-            action()
-        return True
+        tentative = (*self._chord_buffer, normalized_key)
+
+        # Full match → roll back preceding keys, fire action, consume event.
+        for chord in candidates:
+            if tuple(chord.sequence) == tentative:
+                self._reset_chord_buffer()
+                for _ in range(len(chord.sequence) - 1):
+                    try:
+                        self.action_delete_left()
+                    except Exception:
+                        break
+                event.prevent_default()
+                event.stop()
+                action = getattr(app, f"action_{chord.action}", None)
+                if callable(action):
+                    action()
+                return True
+
+        # Prefix of a longer chord → keep pending with min matching timeout.
+        prefix_timeouts = [
+            c.timeout_ms for c in candidates
+            if len(c.sequence) > len(tentative)
+            and tuple(c.sequence[: len(tentative)]) == tentative
+        ]
+        if prefix_timeouts:
+            self._chord_buffer = tentative
+            self._chord_deadline = now + (min(prefix_timeouts) / 1000.0)
+        else:
+            self._reset_chord_buffer()
+
+        return False
+
+    def _reset_chord_buffer(self) -> None:
+        self._chord_buffer = ()
+        self._chord_deadline = 0.0
 
     def _is_visual_mode(self) -> bool:
         """Check if app is in any vim visual mode."""

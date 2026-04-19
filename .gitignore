@@ -71,4 +71,4 @@ tests/integration/drivers/artifacts/
 tests/integration/drivers/
 __pycache__/
 
-sqlit/plans
+plans/*
