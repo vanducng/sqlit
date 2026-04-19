@@ -40,6 +40,10 @@ class ResultsFilterMixin:
     # filter always sees the full query result, not the last filtered subset.
     _results_filter_saved_rows: list[tuple] | None = None
     _results_filter_saved_columns: list[str] | None = None
+    # The previously-committed filtered subset, stashed on `/` re-entry so
+    # that an Escape-without-typing restores the prior commit instead of
+    # losing it to the full view.
+    _results_filter_prior_commit_rows: list[tuple] | None = None
 
     # Maximum matches to display (performance optimization)
     MAX_FILTER_MATCHES = 5000
@@ -99,6 +103,9 @@ class ResultsFilterMixin:
             if self._results_filter_saved_rows is not None:
                 base_columns = list(self._results_filter_saved_columns or [])
                 base_rows = list(self._results_filter_saved_rows)
+                # Stash the currently-committed filtered subset so an Escape
+                # without typing can restore it instead of the full set.
+                self._results_filter_prior_commit_rows = list(self._last_result_rows)
                 # Restore the full view immediately so the user sees all rows
                 # while typing into an empty filter.
                 self._last_result_columns = base_columns
@@ -139,14 +146,22 @@ class ResultsFilterMixin:
             self.results_area.remove_class("results-filter-active")
             self._restore_results_table()
         else:
-            # Restore original data
-            if self._results_filter_original_rows:
+            # If user opened `/` on top of a prior commit and pressed Escape
+            # without typing, restore the prior commit so they don't lose it.
+            # Otherwise restore the full original view.
+            if self._results_filter_prior_commit_rows is not None:
+                restore_rows = self._results_filter_prior_commit_rows
+                self._replace_results_table(self._last_result_columns, restore_rows)
+                self._last_result_rows = list(restore_rows)
+                # Saved snapshot stays — the prior commit is still active,
+                # so a future `/` should still restore the full view.
+            elif self._results_filter_original_rows:
                 self._replace_results_table(self._last_result_columns, self._results_filter_original_rows)
                 self._last_result_rows = list(self._results_filter_original_rows)
-            # Closing via Escape returns to the full view; the saved snapshot
-            # is no longer needed.
-            self._results_filter_saved_rows = None
-            self._results_filter_saved_columns = None
+                # No prior commit — full view restored, snapshot no longer needed.
+                self._results_filter_saved_rows = None
+                self._results_filter_saved_columns = None
+            self._results_filter_prior_commit_rows = None
 
         self._update_footer_bindings()
         self._results_filter_stacked = False
@@ -165,11 +180,17 @@ class ResultsFilterMixin:
             self.results_area.remove_class("results-filter-active")
             if self._results_filter_target_section is not None:
                 self._results_filter_target_section.result_rows = list(self._results_filter_matching_rows)
+            # Stacked-mode does not stash a saved snapshot — each section owns
+            # its own rows on the section object, and re-opening `/` always
+            # re-reads from the section's current state. The saved-snapshot
+            # path below applies to single-result mode only.
         else:
             # Stash the truly-original rows so pressing `/` again can restore
             # the full view even though the committed view is filtered.
             self._results_filter_saved_columns = list(self._results_filter_original_columns)
             self._results_filter_saved_rows = list(self._results_filter_original_rows)
+            # The new accept supersedes any stashed prior-commit view.
+            self._results_filter_prior_commit_rows = None
             # Update stored rows to the filtered data
             self._last_result_rows = list(self._results_filter_matching_rows)
 

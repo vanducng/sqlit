@@ -323,9 +323,9 @@ class QueryResultsMixin:
         self._last_result_row_count = row_count
         # Fresh data arrived; drop any stashed pre-filter snapshot from a
         # previous committed filter so it won't leak into the new query.
-        if hasattr(self, "_results_filter_saved_rows"):
-            self._results_filter_saved_rows = None
-            self._results_filter_saved_columns = None
+        self._results_filter_saved_rows = None
+        self._results_filter_saved_columns = None
+        self._results_filter_prior_commit_rows = None
         table_info = getattr(self, "_pending_result_table_info", None)
 
         # Switch to single result mode (in case we were showing stacked results)

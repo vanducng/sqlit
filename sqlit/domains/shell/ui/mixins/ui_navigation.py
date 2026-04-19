@@ -182,18 +182,18 @@ class UINavigationMixin(UIStatusMixin, UILeaderMixin):
         self.push_screen(HelpScreen(help_text))
 
     def _resolve_focused_pane(self: UINavigationMixinHost) -> str | None:
-        """Walk parent chain to find which pane (sidebar/query/results) owns focus."""
-        widget = getattr(self, "focused", None)
-        while widget is not None:
-            wid = getattr(widget, "id", None)
-            if wid == "sidebar":
-                return "sidebar"
-            if wid == "query-area":
-                return "query"
-            if wid == "results-area":
-                return "results"
-            widget = getattr(widget, "parent", None)
-        return None
+        """Map focus pane to LayoutState's pane vocabulary.
+
+        Delegates to ``_get_focus_pane`` and translates ``"explorer"`` →
+        ``"sidebar"`` (LayoutState mutates sidebar width, so it uses the
+        widget id) and ``"none"`` → ``None``.
+        """
+        pane = self._get_focus_pane()
+        if pane == "explorer":
+            return "sidebar"
+        if pane == "none":
+            return None
+        return pane
 
     def _do_resize(self: UINavigationMixinHost, direction: str) -> None:
         """Resize the focused pane. No-op when focus is in a text-input context
@@ -230,7 +230,7 @@ class UINavigationMixin(UIStatusMixin, UILeaderMixin):
     def action_enter_resize_mode(self: UINavigationMixinHost) -> None:
         """Enter resize mode: arrow keys resize, any other key exits."""
         self._resize_mode_active = True
-        self.notify("RESIZE — \u2190\u2191\u2193\u2192 to resize, any other key exits", timeout=3)
+        self.notify("RESIZE — ← ↑ ↓ → to resize, any other key exits", timeout=3)
 
     def action_toggle_process_worker(self: UINavigationMixinHost) -> None:
         """Toggle the process worker setting."""

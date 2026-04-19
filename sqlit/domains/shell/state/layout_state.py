@@ -61,7 +61,10 @@ class LayoutState:
             else:
                 return False
         elif pane == "results":
-            # Arrow = direction results pane grows. Up grows results (= shrinks query).
+            # Results pane has no width/height of its own — it shares vertical
+            # space with the query pane, so resize is expressed indirectly via
+            # query_height_pct. Up shrinks query (results grows up); down grows
+            # query (results shrinks down). This indirection is intentional.
             if direction == "up":
                 self.query_height_pct -= STEP
             elif direction == "down":
