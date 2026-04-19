@@ -90,6 +90,7 @@ class QueryEditingSelectionMixin:
 
         if text:
             self._copy_text(text)
+            self._record_yank(text, linewise=False)
             # Flash: keep selection visible briefly, then clear
             cursor = self.query_input.cursor_location
 
@@ -116,6 +117,7 @@ class QueryEditingSelectionMixin:
         yanked = get_selection_text(text, start[0], start[1], end[0], end[1])
         if yanked:
             self._copy_text(yanked)
+            self._record_yank(yanked, linewise=False)
 
         # Delete selection
         range_obj = self._selection_range(start, end)
@@ -151,6 +153,7 @@ class QueryEditingSelectionMixin:
         yanked = get_selection_text(text, start[0], start[1], end[0], end[1])
         if yanked:
             self._copy_text(yanked)
+            self._record_yank(yanked, linewise=False)
 
         # Delete selection
         range_obj = self._selection_range(start, end)

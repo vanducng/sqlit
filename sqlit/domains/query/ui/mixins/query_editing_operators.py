@@ -249,10 +249,14 @@ class QueryEditingOperatorsMixin:
         # Copy deleted text to system clipboard
         if op_result.yanked:
             self._copy_text(op_result.yanked)
+            self._record_yank(
+                op_result.yanked,
+                linewise=final_range.motion_type == MotionType.LINEWISE,
+            )
 
     def _delete_with_text_object(self: QueryMixinHost, obj_char: str, around: bool) -> None:
         """Execute delete with a text object."""
-        from sqlit.domains.query.editing import get_text_object, operator_delete
+        from sqlit.domains.query.editing import MotionType, get_text_object, operator_delete
 
         text = self.query_input.text
         row, col = self.query_input.cursor_location
@@ -271,6 +275,10 @@ class QueryEditingOperatorsMixin:
         # Copy deleted text to system clipboard
         if op_result.yanked:
             self._copy_text(op_result.yanked)
+            self._record_yank(
+                op_result.yanked,
+                linewise=range_obj.motion_type == MotionType.LINEWISE,
+            )
 
     # ========================================================================
     # Yank (y) operator actions
@@ -464,6 +472,10 @@ class QueryEditingOperatorsMixin:
         # Copy yanked text to system clipboard
         if op_result.yanked:
             self._copy_text(op_result.yanked)
+            self._record_yank(
+                op_result.yanked,
+                linewise=final_range.motion_type == MotionType.LINEWISE,
+            )
             # Flash the yanked range
             ordered = final_range.ordered()
             self._flash_yank_range(
@@ -473,7 +485,7 @@ class QueryEditingOperatorsMixin:
 
     def _yank_with_text_object(self: QueryMixinHost, obj_char: str, around: bool) -> None:
         """Execute yank with a text object."""
-        from sqlit.domains.query.editing import get_text_object, operator_yank
+        from sqlit.domains.query.editing import MotionType, get_text_object, operator_yank
 
         text = self.query_input.text
         row, col = self.query_input.cursor_location
@@ -487,6 +499,10 @@ class QueryEditingOperatorsMixin:
         # Copy yanked text to system clipboard
         if op_result.yanked:
             self._copy_text(op_result.yanked)
+            self._record_yank(
+                op_result.yanked,
+                linewise=range_obj.motion_type == MotionType.LINEWISE,
+            )
             # Flash the yanked range
             ordered = range_obj.ordered()
             self._flash_yank_range(
@@ -701,6 +717,10 @@ class QueryEditingOperatorsMixin:
         # Copy changed text to system clipboard
         if op_result.yanked:
             self._copy_text(op_result.yanked)
+            self._record_yank(
+                op_result.yanked,
+                linewise=final_range.motion_type == MotionType.LINEWISE,
+            )
 
         # Enter insert mode if operator requests it
         if op_result.enter_insert:
@@ -708,7 +728,7 @@ class QueryEditingOperatorsMixin:
 
     def _change_with_text_object(self: QueryMixinHost, obj_char: str, around: bool) -> None:
         """Execute change with a text object (delete + enter insert mode)."""
-        from sqlit.domains.query.editing import get_text_object, operator_change
+        from sqlit.domains.query.editing import MotionType, get_text_object, operator_change
 
         text = self.query_input.text
         row, col = self.query_input.cursor_location
@@ -727,6 +747,10 @@ class QueryEditingOperatorsMixin:
         # Copy changed text to system clipboard
         if op_result.yanked:
             self._copy_text(op_result.yanked)
+            self._record_yank(
+                op_result.yanked,
+                linewise=range_obj.motion_type == MotionType.LINEWISE,
+            )
 
         # Enter insert mode if operator requests it
         if op_result.enter_insert:

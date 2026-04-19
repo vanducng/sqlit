@@ -73,10 +73,34 @@ def paste_text_below(text: str, row: int, clipboard: str) -> PasteResult:
     paste_lines = clipboard.split("\n")
 
     new_lines = lines[: row + 1] + paste_lines + lines[row + 1 :]
-    new_row = row + len(paste_lines)
-    new_col = 0
+    # Vim places cursor on the first non-blank of the first pasted line.
+    new_row = row + 1
+    new_col = _first_non_blank(paste_lines[0])
 
     return PasteResult("\n".join(new_lines), new_row, new_col)
+
+
+def paste_text_above(text: str, row: int, clipboard: str) -> PasteResult:
+    """Paste clipboard content as a new line before the current row."""
+    lines = text.split("\n")
+    if not lines:
+        lines = [""]
+
+    row = max(0, min(row, len(lines) - 1))
+    paste_lines = clipboard.split("\n")
+
+    new_lines = lines[:row] + paste_lines + lines[row:]
+    new_row = row
+    new_col = _first_non_blank(paste_lines[0])
+
+    return PasteResult("\n".join(new_lines), new_row, new_col)
+
+
+def _first_non_blank(line: str) -> int:
+    for i, ch in enumerate(line):
+        if not ch.isspace():
+            return i
+    return 0
 
 
 def get_selection_text(

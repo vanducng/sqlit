@@ -17,6 +17,7 @@ class QueryEditingClipboardMixin:
             self.notify("Query is empty", severity="warning")
             return
         self._copy_text(query)
+        self._record_yank(query, linewise=False)
         flash_widget(self.query_input)
 
     def action_copy_context(self: QueryMixinHost) -> None:
@@ -68,47 +69,59 @@ class QueryEditingClipboardMixin:
 
         if text:
             self._copy_text(text)
+            self._record_yank(text, linewise=False)
+
+    def _record_yank(self: QueryMixinHost, text: str, *, linewise: bool) -> None:
+        """Remember the most recent yank so p/P know whether to paste linewise."""
+        self._last_yank_text = text
+        self._last_yank_linewise = linewise
+
+    def _is_linewise_clipboard(self: QueryMixinHost, clipboard: str) -> bool:
+        """Return True if clipboard matches our last linewise yank."""
+        return bool(self._last_yank_linewise and clipboard == self._last_yank_text)
 
     def action_paste(self: QueryMixinHost) -> None:
-        """Paste text from clipboard (CTRL+V)."""
+        """Paste after cursor (vim p): below current line for linewise yanks,
+        otherwise insert at the cursor position."""
         from textual.widgets.text_area import Selection
 
-        from sqlit.domains.query.editing import paste_text
+        from sqlit.domains.query.editing import paste_text, paste_text_below
 
         clipboard = self._get_clipboard_text()
         if not clipboard:
             return
 
-        # Push undo state before paste
         self._push_undo_state()
 
         text = self.query_input.text
         row, col = self.query_input.cursor_location
 
-        # If there's a selection, delete it first
         selection = self.query_input.selection
         if selection.start != selection.end:
-            start, end = self._ordered_selection(selection)
-            # Delete selection by replacing with paste content
             from sqlit.domains.query.editing import operator_delete
 
+            start, end = self._ordered_selection(selection)
             range_obj = self._selection_range(start, end)
             result = operator_delete(text, range_obj)
             text = result.text
             row, col = result.row, result.col
 
-        paste_result = paste_text(text, row, col, clipboard)
+        if self._is_linewise_clipboard(clipboard):
+            paste_result = paste_text_below(text, row, clipboard)
+        else:
+            paste_result = paste_text(text, row, col, clipboard)
+
         self.query_input.text = paste_result.text
         self.query_input.cursor_location = (paste_result.row, paste_result.col)
-        # Clear selection by setting cursor position (start == end)
         cursor = self.query_input.cursor_location
         self.query_input.selection = Selection(cursor, cursor)
 
     def action_paste_line_below(self: QueryMixinHost) -> None:
-        """Paste clipboard content as a new line below current line (P)."""
+        """Paste before cursor (vim P): above current line for linewise yanks,
+        otherwise insert at the cursor position."""
         from textual.widgets.text_area import Selection
 
-        from sqlit.domains.query.editing import paste_text_below
+        from sqlit.domains.query.editing import paste_text, paste_text_above
 
         clipboard = self._get_clipboard_text()
         if not clipboard:
@@ -116,8 +129,14 @@ class QueryEditingClipboardMixin:
 
         self._push_undo_state()
 
-        row, _ = self.query_input.cursor_location
-        paste_result = paste_text_below(self.query_input.text, row, clipboard)
+        text = self.query_input.text
+        row, col = self.query_input.cursor_location
+
+        if self._is_linewise_clipboard(clipboard):
+            paste_result = paste_text_above(text, row, clipboard)
+        else:
+            paste_result = paste_text(text, row, col, clipboard)
+
         self.query_input.text = paste_result.text
         self.query_input.cursor_location = (paste_result.row, paste_result.col)
         cursor = self.query_input.cursor_location

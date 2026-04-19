@@ -51,3 +51,8 @@ class QueryMixin(
     _results_render_worker: Worker[Any] | None = None
     _results_render_token: int = 0
     _query_target_database: str | None = None
+    # Vim-style yank register: linewise flag is set when the most recent yank
+    # came from a LINEWISE motion (dd, yy, V-mode, etc.). `p`/`P` use it to
+    # decide whether to paste as new lines (below/above) or character-wise.
+    _last_yank_text: str = ""
+    _last_yank_linewise: bool = False
