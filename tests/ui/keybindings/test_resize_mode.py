@@ -79,6 +79,22 @@ class TestResizeModeFlag:
             assert app._resize_mode_active is False
 
 
+class TestExplorerHiddenInteraction:
+    @pytest.mark.asyncio
+    async def test_apply_layout_safe_with_explorer_hidden(self):
+        """`_apply_layout_state` while sidebar carries `explorer-hidden` class
+        must not crash; the CSS `display: none` rule is independent of the
+        inline width we stamp."""
+        app = _make_app({"layout": {"sidebar_width": 40, "query_height_pct": 50}})
+        async with app.run_test(size=(120, 40)) as pilot:
+            app.screen.add_class("explorer-hidden")
+            app._apply_layout_state()  # must not raise
+            await pilot.pause()
+            sidebar = app.query_one("#sidebar")
+            # Inline width is still stamped (harmless; display:none wins)
+            assert sidebar.styles.inline.has_rule("width")
+
+
 class TestPersistRoundTrip:
     def test_persist_writes_to_settings(self):
         store = MockSettingsStore({"theme": "tokyo-night"})

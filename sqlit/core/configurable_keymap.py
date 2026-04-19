@@ -136,14 +136,16 @@ class ConfigurableKeymapProvider(DefaultKeymapProvider):
         # any existing primary binding on the same key. Warn on collision so
         # users notice when e.g. `resize_pane_right: "q"` shadows focus_query.
         existing_actions = {e.action for e in result if e.primary}
-        existing_keys: dict[str, list[ActionKeyDef]] = {}
+        # First-seen primary entry per key — one shadow warning per collision is enough.
+        existing_keys: dict[str, ActionKeyDef] = {}
         for entry in result:
             if entry.primary:
-                existing_keys.setdefault(entry.key, []).append(entry)
+                existing_keys.setdefault(entry.key, entry)
         for action, key in self._overrides.items():
             if action in existing_actions:
                 continue
-            for shadowed in existing_keys.get(key, ()):
+            shadowed = existing_keys.get(key)
+            if shadowed is not None:
                 _warn(
                     f"injected binding {key!r} for action={action!r} shadows "
                     f"existing primary binding (action={shadowed.action!r}, "
