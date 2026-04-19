@@ -109,6 +109,9 @@ class QueryEditingClipboardMixin:
         if self._is_linewise_clipboard(clipboard):
             paste_result = paste_text_below(text, row, clipboard)
         else:
+            # Charwise fallback inserts at the cursor instead of strict vim
+            # `p` (after cursor); kept for editing ergonomics — same place
+            # external clipboards (Ctrl+V) land.
             paste_result = paste_text(text, row, col, clipboard)
 
         self.query_input.text = paste_result.text
@@ -135,6 +138,8 @@ class QueryEditingClipboardMixin:
         if self._is_linewise_clipboard(clipboard):
             paste_result = paste_text_above(text, row, clipboard)
         else:
+            # Charwise fallback: insert at cursor (same as `p` charwise),
+            # not strict vim `P` (before cursor).
             paste_result = paste_text(text, row, col, clipboard)
 
         self.query_input.text = paste_result.text

@@ -249,10 +249,10 @@ class QueryEditingOperatorsMixin:
         # Copy deleted text to system clipboard
         if op_result.yanked:
             self._copy_text(op_result.yanked)
-            self._record_yank(
-                op_result.yanked,
-                linewise=final_range.motion_type == MotionType.LINEWISE,
-            )
+        self._record_yank(
+            op_result.yanked,
+            linewise=final_range.motion_type == MotionType.LINEWISE,
+        )
 
     def _delete_with_text_object(self: QueryMixinHost, obj_char: str, around: bool) -> None:
         """Execute delete with a text object."""
@@ -275,10 +275,10 @@ class QueryEditingOperatorsMixin:
         # Copy deleted text to system clipboard
         if op_result.yanked:
             self._copy_text(op_result.yanked)
-            self._record_yank(
-                op_result.yanked,
-                linewise=range_obj.motion_type == MotionType.LINEWISE,
-            )
+        self._record_yank(
+            op_result.yanked,
+            linewise=range_obj.motion_type == MotionType.LINEWISE,
+        )
 
     # ========================================================================
     # Yank (y) operator actions
@@ -469,13 +469,13 @@ class QueryEditingOperatorsMixin:
 
         op_result = operator_yank(text, final_range)
 
+        self._record_yank(
+            op_result.yanked,
+            linewise=final_range.motion_type == MotionType.LINEWISE,
+        )
         # Copy yanked text to system clipboard
         if op_result.yanked:
             self._copy_text(op_result.yanked)
-            self._record_yank(
-                op_result.yanked,
-                linewise=final_range.motion_type == MotionType.LINEWISE,
-            )
             # Flash the yanked range
             ordered = final_range.ordered()
             self._flash_yank_range(
@@ -496,13 +496,13 @@ class QueryEditingOperatorsMixin:
 
         op_result = operator_yank(text, range_obj)
 
+        self._record_yank(
+            op_result.yanked,
+            linewise=range_obj.motion_type == MotionType.LINEWISE,
+        )
         # Copy yanked text to system clipboard
         if op_result.yanked:
             self._copy_text(op_result.yanked)
-            self._record_yank(
-                op_result.yanked,
-                linewise=range_obj.motion_type == MotionType.LINEWISE,
-            )
             # Flash the yanked range
             ordered = range_obj.ordered()
             self._flash_yank_range(
@@ -717,10 +717,10 @@ class QueryEditingOperatorsMixin:
         # Copy changed text to system clipboard
         if op_result.yanked:
             self._copy_text(op_result.yanked)
-            self._record_yank(
-                op_result.yanked,
-                linewise=final_range.motion_type == MotionType.LINEWISE,
-            )
+        self._record_yank(
+            op_result.yanked,
+            linewise=final_range.motion_type == MotionType.LINEWISE,
+        )
 
         # Enter insert mode if operator requests it
         if op_result.enter_insert:
@@ -747,10 +747,10 @@ class QueryEditingOperatorsMixin:
         # Copy changed text to system clipboard
         if op_result.yanked:
             self._copy_text(op_result.yanked)
-            self._record_yank(
-                op_result.yanked,
-                linewise=range_obj.motion_type == MotionType.LINEWISE,
-            )
+        self._record_yank(
+            op_result.yanked,
+            linewise=range_obj.motion_type == MotionType.LINEWISE,
+        )
 
         # Enter insert mode if operator requests it
         if op_result.enter_insert:
