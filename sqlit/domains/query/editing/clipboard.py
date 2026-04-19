@@ -63,6 +63,22 @@ def paste_text(text: str, row: int, col: int, clipboard: str) -> PasteResult:
         return PasteResult("\n".join(new_lines), new_row, new_col)
 
 
+def paste_text_below(text: str, row: int, clipboard: str) -> PasteResult:
+    """Paste clipboard content as a new line after the current row."""
+    lines = text.split("\n")
+    if not lines:
+        lines = [""]
+
+    row = max(0, min(row, len(lines) - 1))
+    paste_lines = clipboard.split("\n")
+
+    new_lines = lines[: row + 1] + paste_lines + lines[row + 1 :]
+    new_row = row + len(paste_lines)
+    new_col = 0
+
+    return PasteResult("\n".join(new_lines), new_row, new_col)
+
+
 def get_selection_text(
     text: str,
     start_row: int,

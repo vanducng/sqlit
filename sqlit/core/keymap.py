@@ -66,6 +66,25 @@ class ActionKeyDef:
     priority: bool = False  # Whether to give priority to this binding
 
 
+@dataclass
+class ChordDef:
+    """Definition of a timed key-sequence chord (trailing-mode).
+
+    A chord completes when every key in `sequence` is typed, in order, with
+    consecutive keys arriving within `timeout_ms`, while the binding context
+    named in `context` is active. The resolver is "trailing-mode": earlier
+    keys in the sequence are allowed to take their normal side-effect (e.g.
+    being inserted into a TextArea) and the caller is asked to roll those
+    characters back when the chord completes.
+    """
+
+    sequence: tuple[str, ...]         # e.g. ("j", "k")
+    action: str                        # action name (without "action_" prefix)
+    context: str                       # binding context (see binding_contexts.py)
+    timeout_ms: int = 300              # max ms allowed between consecutive keys
+    guard: str | None = None           # named guard evaluated against InputContext
+
+
 class KeymapProvider(ABC):
     """Abstract base class for keymap providers."""
 
@@ -78,6 +97,13 @@ class KeymapProvider(ABC):
     def get_action_keys(self) -> list[ActionKeyDef]:
         """Get all regular action key definitions."""
         raise NotImplementedError
+
+    def get_chords(self) -> list[ChordDef]:
+        """Get all chord (timed key-sequence) definitions.
+
+        Defaults to an empty list — providers opt in by overriding.
+        """
+        return []
 
     def leader(self, action: str, menu: str | None = "leader") -> str | None:
         """Get the key for a leader command action."""
@@ -127,6 +153,7 @@ class DefaultKeymapProvider(KeymapProvider):
     def __init__(self) -> None:
         self._leader_commands_cache: list[LeaderCommandDef] | None = None
         self._action_keys_cache: list[ActionKeyDef] | None = None
+        self._chords_cache: list[ChordDef] | None = None
         self._leader_emitted: bool = False
         self._action_emitted: bool = False
 
@@ -184,6 +211,25 @@ class DefaultKeymapProvider(KeymapProvider):
             self._emit_action_keybindings(bindings)
             self._action_emitted = True
         return list(bindings)
+
+    def get_chords(self) -> list[ChordDef]:
+        if self._chords_cache is None:
+            self._chords_cache = self._build_chords()
+        return list(self._chords_cache)
+
+    def _build_chords(self) -> list[ChordDef]:
+        return [
+            # Vim-style 'jk' -> <esc>: type 'j' then 'k' within 300ms in the
+            # query editor's INSERT mode (outside autocomplete) to exit back
+            # to NORMAL mode. The preceding 'j' is removed from the buffer.
+            ChordDef(
+                sequence=("j", "k"),
+                action="exit_insert_mode",
+                context="query_insert",
+                timeout_ms=300,
+                guard="not_autocomplete_visible",
+            ),
+        ]
 
     def _build_leader_commands(self) -> list[LeaderCommandDef]:
         return [
@@ -341,6 +387,7 @@ class DefaultKeymapProvider(KeymapProvider):
             ActionKeyDef("O", "open_line_above", "query_normal"),
             ActionKeyDef("enter", "execute_single_statement", "query_normal"),
             ActionKeyDef("p", "paste", "query_normal"),
+            ActionKeyDef("P", "paste_line_below", "query_normal"),
             ActionKeyDef("y", "yank_leader_key", "query_normal"),
             ActionKeyDef("c", "change_leader_key", "query_normal"),
             ActionKeyDef("g", "g_leader_key", "query_normal"),

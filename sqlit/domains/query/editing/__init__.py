@@ -1,6 +1,12 @@
 """Editing helpers for query text."""
 
-from .clipboard import PasteResult, get_selection_text, paste_text, select_all_range
+from .clipboard import (
+    PasteResult,
+    get_selection_text,
+    paste_text,
+    paste_text_below,
+    select_all_range,
+)
 from .comments import toggle_comment_lines
 from .deletion import (
     EditResult,
@@ -46,6 +52,7 @@ __all__ = [
     "PasteResult",
     "get_selection_text",
     "paste_text",
+    "paste_text_below",
     "select_all_range",
     # Motions
     "CHAR_MOTIONS",

@@ -3,6 +3,7 @@
 from .input_context import InputContext
 from .keymap import (
     ActionKeyDef,
+    ChordDef,
     KeymapProvider,
     LeaderCommandDef,
     format_key,
@@ -15,6 +16,7 @@ from .vim import VimMode
 
 __all__ = [
     "ActionKeyDef",
+    "ChordDef",
     "InputContext",
     "KeymapProvider",
     "LeaderCommandDef",
