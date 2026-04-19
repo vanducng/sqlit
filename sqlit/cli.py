@@ -595,8 +595,11 @@ def main() -> int:
     with startup_span("services_build"):
         services = build_app_services(runtime)
 
-    with startup_span("keymap_config"):
-        _apply_keymap_overrides()
+    # `config` subcommands build their own provider; skip the global install
+    # to avoid building ConfigurableKeymapProvider twice (duplicate warnings).
+    if args.command != "config":
+        with startup_span("keymap_config"):
+            _apply_keymap_overrides()
 
     if args.command is None:
         from sqlit.domains.connections.app.url_parser import parse_connection_url

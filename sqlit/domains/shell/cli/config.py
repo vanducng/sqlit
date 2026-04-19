@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -31,7 +32,8 @@ def run_edit() -> int:
     if editor is None:
         print("No editor found. Set $EDITOR or $VISUAL.", file=sys.stderr)
         return 1
-    return subprocess.run([editor, str(path)]).returncode
+    # shlex.split so multi-word EDITOR values like "code --wait" work.
+    return subprocess.run([*shlex.split(editor), str(path)]).returncode
 
 
 def run_show_keymap() -> int:
@@ -48,8 +50,11 @@ def run_show_keymap() -> int:
         if overrides
         else DefaultKeymapProvider()
     )
+    # Use validated overrides so rejected entries (e.g. non-whitelisted
+    # actions) don't get a misleading `*` flag.
+    applied = getattr(provider, "applied_overrides", {})
     rows: list[tuple[str, str, str, str]] = [
-        (k.key, k.action, k.context or "", "*" if k.action in overrides else "")
+        (k.key, k.action, k.context or "", "*" if k.action in applied else "")
         for k in provider.get_action_keys()
         if k.primary
     ]

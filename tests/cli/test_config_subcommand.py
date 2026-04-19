@@ -131,6 +131,50 @@ def test_config_show_keymap_tolerates_malformed_settings(tmp_path: Path) -> None
     assert "non-dict" in result.stderr
 
 
+def test_config_edit_handles_multiword_editor(tmp_path: Path) -> None:
+    """EDITOR values like `code --wait` must be shlex-split, not passed as one exe."""
+    settings = tmp_path / "settings.json"
+    log = tmp_path / "editor.log"
+    fake = tmp_path / "fakeeditor.sh"
+    fake.write_text(
+        f'#!/bin/sh\necho "argc=$#" >> {log}\nfor a in "$@"; do echo "$a" >> {log}; done\n'
+    )
+    fake.chmod(0o755)
+    result = _run(
+        "config",
+        "edit",
+        env_overrides={
+            "SQLIT_SETTINGS_PATH": str(settings),
+            # Multi-word command: first token is the script, `--flag` is an arg.
+            "EDITOR": f"{fake} --flag",
+            "VISUAL": "",
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    lines = log.read_text().splitlines()
+    # Expect 2 args: --flag + settings path (argc=2)
+    assert lines[0] == "argc=2", lines
+    assert lines[1] == "--flag"
+    assert lines[2] == str(settings)
+
+
+def test_config_show_keymap_does_not_flag_rejected_overrides(tmp_path: Path) -> None:
+    """Non-whitelisted overrides should not get `*` in show-keymap output."""
+    settings = tmp_path / "settings.json"
+    settings.write_text(json.dumps({"keymap": {"overrides": {"quit": "Q"}}}))
+    result = _run(
+        "config",
+        "show-keymap",
+        env_overrides={"SQLIT_SETTINGS_PATH": str(settings)},
+    )
+    assert result.returncode == 0, result.stderr
+    quit_lines = [ln for ln in result.stdout.splitlines() if " quit " in f" {ln} "]
+    assert quit_lines, result.stdout
+    assert "*" not in quit_lines[0]
+    # Validator warning should still surface.
+    assert "quit" in result.stderr
+
+
 def test_config_show_keymap_output_is_sortable(tmp_path: Path) -> None:
     settings = tmp_path / "settings.json"
     settings.write_text("{}")

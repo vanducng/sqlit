@@ -80,6 +80,11 @@ class ConfigurableKeymapProvider(DefaultKeymapProvider):
         super().__init__()
         self._overrides: dict[str, str] = _validate_overrides(overrides)
 
+    @property
+    def applied_overrides(self) -> dict[str, str]:
+        """Overrides that passed validation and are actually in effect."""
+        return dict(self._overrides)
+
     def _build_action_keys(self) -> list[ActionKeyDef]:
         base = super()._build_action_keys()
         if not self._overrides:
