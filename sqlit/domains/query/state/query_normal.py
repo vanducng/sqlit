@@ -87,11 +87,13 @@ class QueryNormalModeState(State):
         seen.add("enter_insert_mode")
         left.append(
             DisplayBinding(
-                key=resolve_display_key("execute_query") or "enter",
-                label="Execute",
-                action="execute_query",
+                key=resolve_display_key("execute_single_statement") or "enter",
+                label="Run stmt",
+                action="execute_single_statement",
             )
         )
+        seen.add("execute_single_statement")
+        # Keep execute_query reachable via <space>gr / <space>ga but not shown.
         seen.add("execute_query")
 
         left.append(

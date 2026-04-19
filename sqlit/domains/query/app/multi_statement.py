@@ -257,6 +257,43 @@ def find_statement_at_cursor(sql: str, row: int, col: int) -> tuple[str, int, in
     return ranges[0] if ranges else None
 
 
+def active_statement_line_range(sql: str, row: int, col: int) -> tuple[int, int] | None:
+    """Inclusive (first_row, last_row) of the statement under the cursor.
+
+    Returns None when the buffer contains fewer than 2 statements or when no
+    statement can be resolved for the cursor position. Used by the editor to
+    tint the background of the lines that Enter will actually execute.
+    """
+    if not sql or not sql.strip():
+        return None
+
+    ranges = _get_statement_ranges(sql)
+    if len(ranges) < 2:
+        return None
+
+    result = find_statement_at_cursor(sql, row, col)
+    if result is None:
+        return None
+
+    _, start, end = result
+
+    # Map char offsets to (first_row, last_row) by counting newlines.
+    # Clamp end to len(sql) to guard against any off-by-one at EOF.
+    end = min(end, len(sql))
+    first_row = sql.count("\n", 0, start)
+    # `end` is exclusive upper bound of the trimmed statement; the last
+    # character belonging to the statement lives at `end - 1`.
+    last_char_index = max(start, end - 1)
+    last_row = sql.count("\n", 0, last_char_index + 1)
+    # When the statement ends exactly at a newline, pull last_row back one.
+    if end > 0 and end <= len(sql) and sql[end - 1 : end] == "\n":
+        last_row = max(first_row, last_row - 1)
+
+    if last_row < first_row:
+        last_row = first_row
+    return first_row, last_row
+
+
 def get_executable_sql(sql: str) -> str:
     """Get the SQL that will actually be executed.
 

@@ -15,6 +15,11 @@ class QueryInsertModeState(State):
     def _setup_actions(self) -> None:
         self.allows("exit_insert_mode", label="Normal Mode", help="Exit to NORMAL mode")
         self.allows("execute_query_insert", label="Execute", help="Execute query (stay INSERT)")
+        self.allows(
+            "execute_single_statement_insert",
+            label="Run stmt",
+            help="Execute statement at cursor (stay INSERT)",
+        )
         self.allows("autocomplete_accept", help="Accept autocomplete")
         self.allows("quit")
         # Clipboard actions
@@ -33,7 +38,11 @@ class QueryInsertModeState(State):
         )
 
     def get_display_bindings(self, app: InputContext) -> tuple[list[DisplayBinding], list[DisplayBinding]]:
-        execute_key = resolve_help_key("execute_query_insert") or resolve_display_key("execute_query_insert") or "f5"
+        run_stmt_key = (
+            resolve_help_key("execute_single_statement_insert")
+            or resolve_display_key("execute_single_statement_insert")
+            or "ctrl+enter"
+        )
         left: list[DisplayBinding] = [
             DisplayBinding(
                 key=resolve_display_key("exit_insert_mode") or "esc",
@@ -41,9 +50,9 @@ class QueryInsertModeState(State):
                 action="exit_insert_mode",
             ),
             DisplayBinding(
-                key=execute_key,
-                label="Execute",
-                action="execute_query_insert",
+                key=run_stmt_key,
+                label="Run stmt",
+                action="execute_single_statement_insert",
             ),
             DisplayBinding(
                 key=resolve_display_key("autocomplete_accept") or "tab",

@@ -419,4 +419,53 @@ WHERE id = 1"""
         normalized = normalize_for_execution(query)
 
         assert normalized == query
-        assert ";" not in normalized
+
+
+class TestCursorStatementResolution:
+    """Cursor-at-X edge cases that back Enter-runs-statement behaviour."""
+
+    def test_cursor_inside_middle_statement(self):
+        from sqlit.domains.query.app.multi_statement import find_statement_at_cursor
+
+        sql = "SELECT 1; SELECT 2; SELECT 3"
+        result = find_statement_at_cursor(sql, 0, 12)
+
+        assert result is not None
+        assert result[0] == "SELECT 2"
+
+    def test_cursor_on_blank_line_between_statements_returns_preceding(self):
+        from sqlit.domains.query.app.multi_statement import find_statement_at_cursor
+
+        sql = "SELECT 1;\n\nSELECT 2;"
+        result = find_statement_at_cursor(sql, 1, 0)
+
+        assert result is not None
+        assert result[0] == "SELECT 1"
+
+    def test_cursor_past_eof_returns_last_statement(self):
+        from sqlit.domains.query.app.multi_statement import find_statement_at_cursor
+
+        sql = "SELECT 1;\nSELECT 2"
+        result = find_statement_at_cursor(sql, 10, 0)
+
+        assert result is not None
+        assert result[0] == "SELECT 2"
+
+    def test_single_statement_without_semicolon_returns_it(self):
+        from sqlit.domains.query.app.multi_statement import find_statement_at_cursor
+
+        sql = "SELECT * FROM users"
+        result = find_statement_at_cursor(sql, 0, 5)
+
+        assert result is not None
+        assert result[0] == "SELECT * FROM users"
+
+    def test_statement_ranges_cover_multi_line_statements(self):
+        from sqlit.domains.query.app.multi_statement import _get_statement_ranges
+
+        sql = "SELECT *\nFROM users;\nSELECT 2"
+        ranges = _get_statement_ranges(sql)
+
+        assert len(ranges) == 2
+        assert ranges[0][0] == "SELECT *\nFROM users"
+        assert ranges[1][0] == "SELECT 2"

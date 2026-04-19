@@ -89,6 +89,16 @@ class QueryExecutionMixin(ProcessWorkerLifecycleMixin):
 
     def action_execute_single_statement(self: QueryMixinHost) -> None:
         """Execute only the SQL statement at the current cursor position."""
+        self._execute_single_statement_common(keep_insert_mode=False)
+
+    def action_execute_single_statement_insert(self: QueryMixinHost) -> None:
+        """Execute the SQL statement at the cursor without leaving INSERT mode."""
+        self._execute_single_statement_common(keep_insert_mode=True)
+
+    def _execute_single_statement_common(
+        self: QueryMixinHost, keep_insert_mode: bool
+    ) -> None:
+        """Shared single-statement execution flow for normal + insert mode."""
         from sqlit.domains.query.app.multi_statement import find_statement_at_cursor
 
         if self.current_connection is None or self.current_provider is None:
@@ -100,7 +110,6 @@ class QueryExecutionMixin(ProcessWorkerLifecycleMixin):
             self.notify("No query to execute", severity="warning")
             return
 
-        # Get cursor position and find statement
         row, col = self.query_input.cursor_location
         result = find_statement_at_cursor(full_query, row, col)
 
@@ -121,7 +130,7 @@ class QueryExecutionMixin(ProcessWorkerLifecycleMixin):
             self._start_query_spinner()
 
             self._query_worker = self.run_worker(
-                self._run_query_async(statement, keep_insert_mode=False),
+                self._run_query_async(statement, keep_insert_mode=keep_insert_mode),
                 name="query_execution_single",
                 exclusive=True,
             )

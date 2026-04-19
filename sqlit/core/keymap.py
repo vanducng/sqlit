@@ -275,6 +275,7 @@ class DefaultKeymapProvider(KeymapProvider):
             LeaderCommandDef("E", "WORD_end_back", "End of prev WORD", "Go to", menu="g"),
             LeaderCommandDef("c", "comment", "Toggle comment...", "Toggle", menu="g"),
             LeaderCommandDef("r", "execute_query", "Run query", "Execute", menu="g"),
+            LeaderCommandDef("a", "execute_query", "Run all statements", "Execute", menu="g"),
             LeaderCommandDef("s", "execute_single_statement", "Run statement at cursor", "Execute", menu="g"),
             LeaderCommandDef("t", "execute_query_atomic", "Run as transaction", "Execute", menu="g"),
             # gc comment menu (vim-style)
@@ -338,7 +339,7 @@ class DefaultKeymapProvider(KeymapProvider):
             ActionKeyDef("I", "prepend_insert_mode", "query_normal"),
             ActionKeyDef("o", "open_line_below", "query_normal"),
             ActionKeyDef("O", "open_line_above", "query_normal"),
-            ActionKeyDef("enter", "execute_query", "query_normal"),
+            ActionKeyDef("enter", "execute_single_statement", "query_normal"),
             ActionKeyDef("p", "paste", "query_normal"),
             ActionKeyDef("y", "yank_leader_key", "query_normal"),
             ActionKeyDef("c", "change_leader_key", "query_normal"),
@@ -421,7 +422,7 @@ class DefaultKeymapProvider(KeymapProvider):
             ActionKeyDef("enter", "visual_line_execute", "query_visual_line"),
             # Query (insert mode)
             ActionKeyDef("escape", "exit_insert_mode", "query_insert"),
-            ActionKeyDef("ctrl+enter", "execute_query_insert", "query_insert"),
+            ActionKeyDef("ctrl+enter", "execute_single_statement_insert", "query_insert"),
             ActionKeyDef("tab", "autocomplete_accept", "query_insert"),
             # Navigation
             ActionKeyDef("e", "focus_explorer", "navigation"),

@@ -22,6 +22,7 @@ class AutocompleteActiveState(State):
             help_key="esc",
         )
         self.allows("execute_query_insert")
+        self.allows("execute_single_statement_insert")
         self.allows("quit")
         self.forbids(
             "exit_insert_mode",  # Escape handled via autocomplete_close (closes + NORMAL mode)

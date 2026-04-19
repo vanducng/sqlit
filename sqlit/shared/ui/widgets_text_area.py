@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 from rich.segment import Segment
+from rich.style import Style
 from textual.color import Color
 from textual.events import Key
 from textual.strip import Strip
@@ -21,6 +22,9 @@ class QueryTextArea(TextArea):
     _terminal_cursor_active: bool = False
     _relative_line_numbers: bool = False
     _last_cursor_row: int = -1
+    _stmt_range_text: str = ""
+    _stmt_range_cursor: tuple[int, int] = (-1, -1)
+    _active_statement_line_range: tuple[int, int] | None = None
 
     # Normalize OS-variant shortcuts to canonical forms
     # Maps: super → ctrl for common operations, strips shift where irrelevant
@@ -125,6 +129,14 @@ class QueryTextArea(TextArea):
     def _watch_has_focus(self, focus: bool) -> None:
         super()._watch_has_focus(focus)
         self._sync_terminal_cursor()
+        # Drop any stale statement highlight when the editor loses focus so it
+        # does not linger in the background while the user is in the explorer
+        # or results pane.
+        if not focus and self._active_statement_line_range is not None:
+            self._active_statement_line_range = None
+            self._stmt_range_cursor = (-1, -1)
+            self._line_cache.clear()
+            self.refresh()
 
     async def _on_key(self, event: Key) -> None:
         """Intercept clipboard, undo/redo, and Enter keys."""
@@ -276,63 +288,114 @@ class QueryTextArea(TextArea):
                 self._last_cursor_row = cursor_row
                 self._line_cache.clear()
                 self.refresh()
+        # Re-resolve which statement lines should be tinted.
+        old_range = self._active_statement_line_range
+        new_range = self._resolve_active_statement_line_range()
+        if new_range != old_range:
+            self._line_cache.clear()
+            self.refresh()
+
+    def _resolve_active_statement_line_range(self) -> tuple[int, int] | None:
+        """Compute (first_row, last_row) to tint, cached by (text, cursor)."""
+        from sqlit.domains.query.app.multi_statement import active_statement_line_range
+
+        text = self.text
+        cursor = self.selection.end
+
+        if text != self._stmt_range_text:
+            self._stmt_range_text = text
+            self._stmt_range_cursor = (-1, -1)
+
+        if cursor != self._stmt_range_cursor:
+            self._stmt_range_cursor = cursor
+            self._active_statement_line_range = active_statement_line_range(
+                text, cursor[0], cursor[1]
+            )
+        return self._active_statement_line_range
+
+    def _active_statement_tint_style(self) -> Style | None:
+        """Subtle background tint for the current statement."""
+        theme = getattr(self.app, "current_theme", None)
+        is_dark = bool(getattr(theme, "dark", True))
+        # Low-contrast overlay that reads on both themes.
+        hex_bg = "#2a2d3a" if is_dark else "#e6e8ec"
+        try:
+            return Style(bgcolor=hex_bg)
+        except Exception:
+            return None
 
     def render_line(self, y: int) -> Strip:
-        """Render a line, with relative line numbers if enabled."""
+        """Render a line, with relative line numbers + statement highlight."""
         # Get the base rendered line
         strip = super().render_line(y)
 
-        # If relative line numbers not enabled, return as-is
-        if not self._relative_line_numbers or not self.show_line_numbers:
-            return strip
-
-        # Get line info
         scroll_y = self.scroll_offset[1]
         absolute_y = scroll_y + y
         cursor_row = self.selection.end[0]
         gutter_width = self.gutter_width
-
-        if gutter_width == 0:
-            return strip
-
-        # Get the wrapped document info to check if this is a continuation line
         wrapped_document = self.wrapped_document
-        if absolute_y >= wrapped_document.height:
-            return strip
 
-        try:
-            line_info = wrapped_document._offset_to_line_info[absolute_y]
-        except (IndexError, AttributeError):
-            return strip
+        line_index: int | None = None
+        section_offset: int | None = None
+        if absolute_y < wrapped_document.height:
+            try:
+                line_info = wrapped_document._offset_to_line_info[absolute_y]
+            except (IndexError, AttributeError):
+                line_info = None
+            if line_info is not None:
+                line_index, section_offset = line_info
 
-        if line_info is None:
-            return strip
+        # Relative line numbers: replace gutter segment.
+        if (
+            self._relative_line_numbers
+            and self.show_line_numbers
+            and gutter_width > 0
+            and line_index is not None
+            and section_offset == 0
+        ):
+            if line_index == cursor_row:
+                line_num = line_index + self.line_number_start
+            else:
+                line_num = abs(line_index - cursor_row)
+            gutter_width_no_margin = gutter_width - 2
+            new_gutter_text = f"{line_num:>{gutter_width_no_margin}}  "
+            segments = list(strip._segments)
+            if segments:
+                old_seg = segments[0]
+                if len(old_seg.text) == gutter_width:
+                    segments[0] = Segment(new_gutter_text, old_seg.style)
+                    strip = Strip(segments, strip.cell_length)
 
-        line_index, section_offset = line_info
-
-        # Only show line number on first section of wrapped lines
-        if section_offset != 0:
-            return strip
-
-        # Calculate the relative/absolute line number to display
-        if line_index == cursor_row:
-            # Current line shows absolute number
-            line_num = line_index + self.line_number_start
-        else:
-            # Other lines show relative distance
-            line_num = abs(line_index - cursor_row)
-
-        # Format the new gutter content
-        gutter_width_no_margin = gutter_width - 2
-        new_gutter_text = f"{line_num:>{gutter_width_no_margin}}  "
-
-        # Replace the gutter segment in the strip
-        segments = list(strip._segments)
-        if segments:
-            # The first segment should be the gutter
-            old_seg = segments[0]
-            if len(old_seg.text) == gutter_width:
-                segments[0] = Segment(new_gutter_text, old_seg.style)
-                return Strip(segments, strip.cell_length)
+        # Current-statement highlight tint on non-gutter content.
+        # Guard against text changes that happen without a cursor move — drop
+        # any stale range so we re-resolve on the next selection watch.
+        if (
+            self._active_statement_line_range is not None
+            and self._stmt_range_text is not self.text
+            and self._stmt_range_text != self.text
+        ):
+            self._active_statement_line_range = None
+            self._stmt_range_cursor = (-1, -1)
+        active = self._active_statement_line_range
+        if (
+            active is not None
+            and line_index is not None
+            and active[0] <= line_index <= active[1]
+        ):
+            tint = self._active_statement_tint_style()
+            if tint is not None:
+                segments = list(strip._segments)
+                start_idx = 0
+                if gutter_width > 0 and segments:
+                    first = segments[0]
+                    if len(first.text) == gutter_width:
+                        start_idx = 1
+                for i in range(start_idx, len(segments)):
+                    seg = segments[i]
+                    existing = seg.style or Style()
+                    # Place tint under existing style so explicit selection /
+                    # syntax colors still win on top.
+                    segments[i] = Segment(seg.text, tint + existing)
+                strip = Strip(segments, strip.cell_length)
 
         return strip

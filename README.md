@@ -194,6 +194,7 @@ sqlit connections delete "MyConnection"
 | `i` | Enter INSERT mode |
 | `Esc` | Back to NORMAL mode |
 | `e` / `q` / `r` | Focus Explorer / Query / Results |
+| `Enter` (NORMAL) | Run the statement under the cursor (`Ctrl+Enter` in INSERT) |
 | `s` | SELECT TOP 100 from table |
 | `h` | Query history |
 | `d` | Clear query |
@@ -228,6 +229,8 @@ Use with operators like `y`, `d`, `c` (e.g. `dw`, `y$`).
 | `<space>e` | Toggle Explorer |
 | `<space>f` | Toggle Maximize |
 | `<space>t` | Change theme |
+| `<space>ga` / `<space>gr` | Run **all** statements in the buffer |
+| `<space>gs` | Run statement at cursor (same as `Enter`) |
 | `<space>h` | Help |
 | `<space>q` | Quit |
 
