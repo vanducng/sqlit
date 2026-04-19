@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from rich.markup import escape as escape_markup
 
-from sqlit.shared.core.utils import fuzzy_match, highlight_matches
+from sqlit.shared.core.utils import flatten_pasted_text, fuzzy_match, highlight_matches
 from sqlit.shared.ui.protocols import ResultsFilterMixinHost
 from sqlit.shared.ui.widgets import SqlitDataTable
 
@@ -36,6 +36,14 @@ class ResultsFilterMixin:
     _results_filter_stacked: bool = False
     _results_filter_target_section: Any | None = None
     _results_filter_target_table: Any | None = None
+    # Truly-original rows/columns preserved across accept so re-opening the
+    # filter always sees the full query result, not the last filtered subset.
+    _results_filter_saved_rows: list[tuple] | None = None
+    _results_filter_saved_columns: list[str] | None = None
+    # The previously-committed filtered subset, stashed on `/` re-entry so
+    # that an Escape-without-typing restores the prior commit instead of
+    # losing it to the full view.
+    _results_filter_prior_commit_rows: list[tuple] | None = None
 
     # Maximum matches to display (performance optimization)
     MAX_FILTER_MATCHES = 5000
@@ -89,15 +97,31 @@ class ResultsFilterMixin:
             except Exception:
                 pass
         else:
-            # Check if there are results to filter
-            if not self._last_result_rows:
+            # Prefer the truly-original snapshot if a previous accept stashed
+            # it; this ensures re-opening the filter always starts from the
+            # full result set, not the last committed filtered subset.
+            if self._results_filter_saved_rows is not None:
+                base_columns = list(self._results_filter_saved_columns or [])
+                base_rows = list(self._results_filter_saved_rows)
+                # Stash the currently-committed filtered subset so an Escape
+                # without typing can restore it instead of the full set.
+                self._results_filter_prior_commit_rows = list(self._last_result_rows)
+                # Restore the full view immediately so the user sees all rows
+                # while typing into an empty filter.
+                self._last_result_columns = base_columns
+                self._last_result_rows = base_rows
+                self._replace_results_table(base_columns, base_rows)
+            elif not self._last_result_rows:
                 self.notify("No results to filter", severity="warning")
                 return
-            self._results_filter_original_columns = list(self._last_result_columns)
-            self._results_filter_original_rows = list(self._last_result_rows)
+            else:
+                base_columns = list(self._last_result_columns)
+                base_rows = list(self._last_result_rows)
+            self._results_filter_original_columns = base_columns
+            self._results_filter_original_rows = base_rows
             # Initially all rows match (no filter applied)
-            self._results_filter_matching_rows = list(self._last_result_rows)
-            self._prime_results_filter_cache(self._last_result_rows)
+            self._results_filter_matching_rows = list(base_rows)
+            self._prime_results_filter_cache(base_rows)
 
         self._results_filter_visible = True
         self._results_filter_text = ""
@@ -122,10 +146,22 @@ class ResultsFilterMixin:
             self.results_area.remove_class("results-filter-active")
             self._restore_results_table()
         else:
-            # Restore original data
-            if self._results_filter_original_rows:
+            # If user opened `/` on top of a prior commit and pressed Escape
+            # without typing, restore the prior commit so they don't lose it.
+            # Otherwise restore the full original view.
+            if self._results_filter_prior_commit_rows is not None:
+                restore_rows = self._results_filter_prior_commit_rows
+                self._replace_results_table(self._last_result_columns, restore_rows)
+                self._last_result_rows = list(restore_rows)
+                # Saved snapshot stays — the prior commit is still active,
+                # so a future `/` should still restore the full view.
+            elif self._results_filter_original_rows:
                 self._replace_results_table(self._last_result_columns, self._results_filter_original_rows)
                 self._last_result_rows = list(self._results_filter_original_rows)
+                # No prior commit — full view restored, snapshot no longer needed.
+                self._results_filter_saved_rows = None
+                self._results_filter_saved_columns = None
+            self._results_filter_prior_commit_rows = None
 
         self._update_footer_bindings()
         self._results_filter_stacked = False
@@ -144,7 +180,17 @@ class ResultsFilterMixin:
             self.results_area.remove_class("results-filter-active")
             if self._results_filter_target_section is not None:
                 self._results_filter_target_section.result_rows = list(self._results_filter_matching_rows)
+            # Stacked-mode does not stash a saved snapshot — each section owns
+            # its own rows on the section object, and re-opening `/` always
+            # re-reads from the section's current state. The saved-snapshot
+            # path below applies to single-result mode only.
         else:
+            # Stash the truly-original rows so pressing `/` again can restore
+            # the full view even though the committed view is filtered.
+            self._results_filter_saved_columns = list(self._results_filter_original_columns)
+            self._results_filter_saved_rows = list(self._results_filter_original_rows)
+            # The new accept supersedes any stashed prior-commit view.
+            self._results_filter_prior_commit_rows = None
             # Update stored rows to the filtered data
             self._last_result_rows = list(self._results_filter_matching_rows)
 
@@ -222,6 +268,15 @@ class ResultsFilterMixin:
             event.stop()
             return
 
+        # Ctrl+U: clear the entire filter text in one stroke
+        if key == "ctrl+u":
+            if self._results_filter_text:
+                self._results_filter_text = ""
+                self._schedule_filter_update()
+            event.prevent_default()
+            event.stop()
+            return
+
         # Handle printable characters - use event.character for proper shift support
         char = getattr(event, "character", None)
         if char and char.isprintable():
@@ -235,6 +290,33 @@ class ResultsFilterMixin:
         parent_on_key = getattr(super(), "on_key", None)
         if callable(parent_on_key):
             parent_on_key(event)
+
+    def _reset_filter_snapshots(self: ResultsFilterMixinHost) -> None:
+        """Clear stashed pre-filter snapshots.
+
+        Called on fresh query results so stale snapshots from a previous
+        committed filter cannot leak into the new result set.
+        """
+        self._results_filter_saved_rows = None
+        self._results_filter_saved_columns = None
+        self._results_filter_prior_commit_rows = None
+
+    def on_paste(self: ResultsFilterMixinHost, event: Any) -> None:
+        """Append clipboard content to the results filter when active."""
+        text = getattr(event, "text", "") or ""
+        flat = flatten_pasted_text(text)
+        # If filter inactive OR paste is empty/whitespace-only, bubble to
+        # parent so other handlers can react instead of silently consuming.
+        if not self._results_filter_visible or not flat:
+            parent = getattr(super(), "on_paste", None)
+            if callable(parent):
+                parent(event)
+            return
+
+        self._results_filter_text += flat
+        self._schedule_filter_update()
+        event.prevent_default()
+        event.stop()
 
     def _schedule_filter_update(self: ResultsFilterMixinHost) -> None:
         """Schedule a debounced filter update based on row count."""

@@ -11,7 +11,15 @@ from sqlit.shared.core.debug_events import emit_debug_event
 # (`keymap.overrides`). Expanding this set is a deliberate design decision —
 # see `CONTRIBUTING.md` → "Rebindable actions whitelist".
 REBINDABLE_ACTIONS: frozenset[str] = frozenset(
-    {"focus_explorer", "focus_query", "focus_results"}
+    {
+        "focus_explorer",
+        "focus_query",
+        "focus_results",
+        "resize_pane_left",
+        "resize_pane_right",
+        "resize_pane_up",
+        "resize_pane_down",
+    }
 )
 
 KEY_DISPLAY_OVERRIDES: dict[str, str] = {
@@ -243,6 +251,7 @@ class DefaultKeymapProvider(KeymapProvider):
             # View
             LeaderCommandDef("e", "toggle_explorer", "Toggle Explorer", "View"),
             LeaderCommandDef("f", "toggle_fullscreen", "Toggle Maximize", "View"),
+            LeaderCommandDef("r", "enter_resize_mode", "Resize panes", "View"),
             # Connection
             LeaderCommandDef("c", "show_connection_picker", "Connect", "Connection"),
             LeaderCommandDef("x", "disconnect", "Disconnect", "Connection", guard="has_connection"),

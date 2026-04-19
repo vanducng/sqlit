@@ -20,7 +20,7 @@ from sqlit.domains.connections.app.cloud_actions import (
 from sqlit.domains.connections.app.save_connection import is_config_saved, save_connection
 from sqlit.domains.connections.discovery.cloud import ProviderState, get_providers
 from sqlit.domains.explorer.ui.tree import builder as tree_builder
-from sqlit.shared.core.utils import fuzzy_match
+from sqlit.shared.core.utils import flatten_pasted_text, fuzzy_match
 from sqlit.shared.ui.protocols import AppProtocol
 from sqlit.shared.ui.widgets import Dialog, FilterInput
 
@@ -304,6 +304,21 @@ class ConnectionPickerScreen(ModalScreen):
             self._update_list()
             event.prevent_default()
             event.stop()
+
+    def on_paste(self, event: Any) -> None:
+        """Append clipboard content to the picker filter when active."""
+        if not self._filter_state.active:
+            return
+        text = getattr(event, "text", "") or ""
+        flat = flatten_pasted_text(text)
+        if not flat:
+            # Empty/whitespace-only paste — let it bubble rather than swallow.
+            return
+        self._filter_state.text += flat
+        self._update_filter_display()
+        self._update_list()
+        event.prevent_default()
+        event.stop()
 
     def action_backspace(self) -> None:
         if not self._filter_state.active:

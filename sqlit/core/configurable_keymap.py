@@ -130,4 +130,33 @@ class ConfigurableKeymapProvider(DefaultKeymapProvider):
                 )
                 continue
             result.append(entry)
+
+        # Inject entries for whitelisted actions that ship without a default key.
+        # Injected entries use context=None (global) and would silently shadow
+        # any existing primary binding on the same key. Warn on collision so
+        # users notice when e.g. `resize_pane_right: "q"` shadows focus_query.
+        existing_actions = {e.action for e in result if e.primary}
+        # First-seen primary entry per key — one shadow warning per collision is enough.
+        existing_keys: dict[str, ActionKeyDef] = {}
+        for entry in result:
+            if entry.primary:
+                existing_keys.setdefault(entry.key, entry)
+        for action, key in self._overrides.items():
+            if action in existing_actions:
+                continue
+            shadowed = existing_keys.get(key)
+            if shadowed is not None:
+                _warn(
+                    f"injected binding {key!r} for action={action!r} shadows "
+                    f"existing primary binding (action={shadowed.action!r}, "
+                    f"context={shadowed.context!r})"
+                )
+            emit_debug_event(
+                "keymap_override",
+                category="keybinding",
+                action=action,
+                old_key=None,
+                new_key=key,
+            )
+            result.append(ActionKeyDef(key=key, action=action, context=None, primary=True))
         return result

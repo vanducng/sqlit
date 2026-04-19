@@ -23,11 +23,32 @@ class UINavigationMixin(UIStatusMixin, UILeaderMixin):
     _last_active_pane: str | None = None
 
     def _set_fullscreen_mode(self: UINavigationMixinHost, mode: str) -> None:
-        """Set fullscreen mode: none|explorer|query|results."""
+        """Set fullscreen mode: none|explorer|query|results.
+
+        Inline sizes stamped by ``_apply_layout_state`` outrank CSS class rules
+        in Textual, so the ``*-fullscreen`` classes cannot grow the surviving
+        pane while inline width/height remain. Null them out on enter and
+        re-stamp from ``LayoutState`` on exit.
+        """
         self._fullscreen_mode = mode
         self.screen.remove_class("results-fullscreen")
         self.screen.remove_class("query-fullscreen")
         self.screen.remove_class("explorer-fullscreen")
+
+        if mode == "none":
+            self._apply_layout_state()
+            return
+
+        for selector, prop in (
+            ("#sidebar", "width"),
+            ("#query-area", "height"),
+            ("#results-area", "height"),
+        ):
+            try:
+                widget = self.query_one(selector)
+                setattr(widget.styles, prop, None)
+            except Exception:
+                pass
 
         if mode == "results":
             self.screen.add_class("results-fullscreen")
@@ -180,6 +201,66 @@ class UINavigationMixin(UIStatusMixin, UILeaderMixin):
 
         help_text = self._state_machine.generate_help_text()
         self.push_screen(HelpScreen(help_text))
+
+    def _resolve_focused_pane(self: UINavigationMixinHost) -> str | None:
+        """Map focus pane to LayoutState's pane vocabulary.
+
+        Delegates to ``_get_focus_pane`` and translates ``"explorer"`` →
+        ``"sidebar"`` (LayoutState mutates sidebar width, so it uses the
+        widget id) and ``"none"`` → ``None``.
+        """
+        pane = self._get_focus_pane()
+        if pane == "explorer":
+            return "sidebar"
+        if pane == "none":
+            return None
+        return pane
+
+    def _do_resize(self: UINavigationMixinHost, direction: str) -> None:
+        """Resize the focused pane. No-op when focus is in a text-input context
+        where arrow keys carry caret-movement semantics — protects user-rebound
+        ctrl+arrow from stealing word-nav. Guards are scoped to the pane that
+        owns each input: tree filter only blocks when focus is in the sidebar,
+        results filter only when focus is in results, INSERT only when in query."""
+        from sqlit.core.vim import VimMode
+
+        pane = self._resolve_focused_pane()
+        if pane is None:
+            return
+        if pane == "query" and self.vim_mode == VimMode.INSERT:
+            return
+        if pane == "sidebar" and getattr(self, "_tree_filter_visible", False):
+            return
+        if pane == "results" and getattr(self, "_results_filter_visible", False):
+            return
+        if self._layout_state.adjust(pane, direction):
+            self._apply_layout_state()
+
+    def action_resize_pane_left(self: UINavigationMixinHost) -> None:
+        self._do_resize("left")
+
+    def action_resize_pane_right(self: UINavigationMixinHost) -> None:
+        self._do_resize("right")
+
+    def action_resize_pane_up(self: UINavigationMixinHost) -> None:
+        self._do_resize("up")
+
+    def action_resize_pane_down(self: UINavigationMixinHost) -> None:
+        self._do_resize("down")
+
+    def action_enter_resize_mode(self: UINavigationMixinHost) -> None:
+        """Enter resize mode: arrow keys resize, any other key exits."""
+        self._resize_mode_active = True
+        self.notify("RESIZE — ← ↑ ↓ → to resize, any other key exits", timeout=3)
+
+    def _clear_resize_mode(self: UINavigationMixinHost) -> None:
+        """Single point to drop the resize-mode flag.
+
+        Called from on_key when a non-arrow key arrives while in resize mode,
+        and from the modal_open early-return so a modal opening mid-resize
+        doesn't trap the flag indefinitely.
+        """
+        self._resize_mode_active = False
 
     def action_toggle_process_worker(self: UINavigationMixinHost) -> None:
         """Toggle the process worker setting."""

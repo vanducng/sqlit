@@ -321,6 +321,9 @@ class QueryResultsMixin:
         self._last_result_columns = columns
         self._last_result_rows = rows
         self._last_result_row_count = row_count
+        # Fresh data arrived; drop any stashed pre-filter snapshot from a
+        # previous committed filter so it won't leak into the new query.
+        self._reset_filter_snapshots()
         table_info = getattr(self, "_pending_result_table_info", None)
 
         # Switch to single result mode (in case we were showing stacked results)

@@ -20,7 +20,54 @@ def _all_for_action(keys: list[ActionKeyDef], action: str) -> list[ActionKeyDef]
 
 
 def test_rebindable_actions_contains_pane_focus() -> None:
-    assert set(REBINDABLE_ACTIONS) == {"focus_explorer", "focus_query", "focus_results"}
+    assert {"focus_explorer", "focus_query", "focus_results"}.issubset(REBINDABLE_ACTIONS)
+
+
+def test_rebindable_actions_contains_resize_pane() -> None:
+    assert {
+        "resize_pane_left",
+        "resize_pane_right",
+        "resize_pane_up",
+        "resize_pane_down",
+    }.issubset(REBINDABLE_ACTIONS)
+
+
+def test_override_only_rebindable_injects_entry() -> None:
+    """resize_pane_* actions ship without a default key — overrides must inject a fresh entry."""
+    provider = ConfigurableKeymapProvider({"resize_pane_right": "ctrl+right"})
+    keys = provider.get_action_keys()
+    entry = _primary(keys, "resize_pane_right")
+    assert entry is not None
+    assert entry.key == "ctrl+right"
+    assert entry.context is None  # injected entries are global
+
+
+def test_override_only_rebindable_no_default_entry() -> None:
+    """Without an override, resize_pane_* actions produce no entry."""
+    provider = ConfigurableKeymapProvider({})
+    keys = provider.get_action_keys()
+    assert _primary(keys, "resize_pane_right") is None
+    assert _primary(keys, "resize_pane_left") is None
+
+
+def test_injected_binding_warns_on_collision(capsys: pytest.CaptureFixture[str]) -> None:
+    """Injecting an override-only action onto a key already bound elsewhere must warn."""
+    # `q` is bound to focus_query (navigation context); injecting resize_pane_right
+    # globally onto `q` would silently shadow it. Expect a stderr warning.
+    provider = ConfigurableKeymapProvider({"resize_pane_right": "q"})
+    keys = provider.get_action_keys()
+    assert _primary(keys, "resize_pane_right") is not None
+    err = capsys.readouterr().err
+    assert "shadows" in err
+    assert "resize_pane_right" in err
+
+
+def test_injected_binding_no_warning_when_key_unused(capsys: pytest.CaptureFixture[str]) -> None:
+    """A user-only key (e.g., ctrl+right) that isn't in any default binding must not warn."""
+    provider = ConfigurableKeymapProvider({"resize_pane_right": "ctrl+right"})
+    provider.get_action_keys()
+    err = capsys.readouterr().err
+    assert "shadows" not in err
 
 
 def test_no_overrides_behaves_like_default() -> None:

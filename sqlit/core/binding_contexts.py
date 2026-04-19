@@ -37,4 +37,7 @@ def get_binding_contexts(ctx: InputContext) -> set[str]:
     if ctx.value_view_active:
         contexts.add("value_view")
 
+    if getattr(ctx, "resize_mode_active", False):
+        contexts.add("resize_mode")
+
     return contexts
