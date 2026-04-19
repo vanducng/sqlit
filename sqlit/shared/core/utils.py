@@ -56,6 +56,15 @@ def highlight_matches(text: str, indices: list[int], style: str = "bold yellow")
     return "".join(result)
 
 
+def flatten_pasted_text(text: str) -> str:
+    """Flatten multi-line pasted text for single-line filter inputs.
+
+    Strips carriage returns, collapses newlines to spaces, and trims
+    surrounding whitespace. Returns empty string for whitespace-only input.
+    """
+    return text.replace("\r", "").replace("\n", " ").strip()
+
+
 def format_duration_ms(ms: float, *, always_seconds: bool = False) -> str:
     """Format milliseconds into a human-readable duration string.
 

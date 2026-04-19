@@ -138,12 +138,11 @@ class TestResultsFilterSnapshot:
         ResultsFilterMixin.action_results_filter_accept(f)
         assert f._results_filter_saved_rows is not None
 
-        # Simulate fresh-results cleanup (mirrors query_results.py:324-327)
+        # Simulate fresh-results cleanup via the shared helper so any future
+        # snapshot field added to the mixin is covered automatically.
         f._last_result_columns = ["a"]
         f._last_result_rows = [(1,), (2,), (3,)]
-        f._results_filter_saved_rows = None
-        f._results_filter_saved_columns = None
-        f._results_filter_prior_commit_rows = None
+        ResultsFilterMixin._reset_filter_snapshots(f)
 
         ResultsFilterMixin.action_results_filter(f)
         assert f._results_filter_original_rows == [(1,), (2,), (3,)]

@@ -20,7 +20,7 @@ from sqlit.domains.connections.app.cloud_actions import (
 from sqlit.domains.connections.app.save_connection import is_config_saved, save_connection
 from sqlit.domains.connections.discovery.cloud import ProviderState, get_providers
 from sqlit.domains.explorer.ui.tree import builder as tree_builder
-from sqlit.shared.core.utils import fuzzy_match
+from sqlit.shared.core.utils import flatten_pasted_text, fuzzy_match
 from sqlit.shared.ui.protocols import AppProtocol
 from sqlit.shared.ui.widgets import Dialog, FilterInput
 
@@ -310,7 +310,7 @@ class ConnectionPickerScreen(ModalScreen):
         if not self._filter_state.active:
             return
         text = getattr(event, "text", "") or ""
-        flat = text.replace("\r", "").replace("\n", " ").strip()
+        flat = flatten_pasted_text(text)
         if not flat:
             # Empty/whitespace-only paste — let it bubble rather than swallow.
             return

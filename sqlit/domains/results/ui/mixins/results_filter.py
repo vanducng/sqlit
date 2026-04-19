@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from rich.markup import escape as escape_markup
 
-from sqlit.shared.core.utils import fuzzy_match, highlight_matches
+from sqlit.shared.core.utils import flatten_pasted_text, fuzzy_match, highlight_matches
 from sqlit.shared.ui.protocols import ResultsFilterMixinHost
 from sqlit.shared.ui.widgets import SqlitDataTable
 
@@ -291,10 +291,20 @@ class ResultsFilterMixin:
         if callable(parent_on_key):
             parent_on_key(event)
 
+    def _reset_filter_snapshots(self: ResultsFilterMixinHost) -> None:
+        """Clear stashed pre-filter snapshots.
+
+        Called on fresh query results so stale snapshots from a previous
+        committed filter cannot leak into the new result set.
+        """
+        self._results_filter_saved_rows = None
+        self._results_filter_saved_columns = None
+        self._results_filter_prior_commit_rows = None
+
     def on_paste(self: ResultsFilterMixinHost, event: Any) -> None:
         """Append clipboard content to the results filter when active."""
         text = getattr(event, "text", "") or ""
-        flat = text.replace("\r", "").replace("\n", " ").strip()
+        flat = flatten_pasted_text(text)
         # If filter inactive OR paste is empty/whitespace-only, bubble to
         # parent so other handlers can react instead of silently consuming.
         if not self._results_filter_visible or not flat:
