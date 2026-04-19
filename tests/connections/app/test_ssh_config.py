@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("paramiko", reason="ssh extra not installed")
+
 SSH_CONFIG_FIXTURE = """\
 # Global settings
 Host *
