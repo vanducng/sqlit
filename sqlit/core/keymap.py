@@ -7,6 +7,13 @@ from dataclasses import dataclass
 
 from sqlit.shared.core.debug_events import emit_debug_event
 
+# Whitelist of action names the user may remap via `settings.json`
+# (`keymap.overrides`). Expanding this set is a deliberate design decision —
+# see `CONTRIBUTING.md` → "Rebindable actions whitelist".
+REBINDABLE_ACTIONS: frozenset[str] = frozenset(
+    {"focus_explorer", "focus_query", "focus_results"}
+)
+
 KEY_DISPLAY_OVERRIDES: dict[str, str] = {
     "question_mark": "?",
     "slash": "/",

@@ -93,7 +93,7 @@ class SnowflakeAdapter(CursorBasedAdapter):
             connect_args["authenticator"] = authenticator
         if "private_key_file" in extras:
             connect_args["private_key_file"] = extras["private_key_file"]
-        if "private_key_file_pwd" in extras:
+        if extras.get("private_key_file_pwd"):
             connect_args["private_key_file_pwd"] = extras["private_key_file_pwd"]
         if "oauth_token" in extras:
             connect_args["token"] = extras["oauth_token"]

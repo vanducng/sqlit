@@ -170,9 +170,9 @@ class UIStateMachine:
         # NAVIGATION
         # ═══════════════════════════════════════════════════════════════════
         lines.append(section("NAVIGATION"))
-        lines.append(binding("e", "Focus Explorer pane"))
-        lines.append(binding("q", "Focus Query pane"))
-        lines.append(binding("r", "Focus Results pane"))
+        lines.append(binding(resolve_display_key("focus_explorer") or "e", "Focus Explorer pane"))
+        lines.append(binding(resolve_display_key("focus_query") or "q", "Focus Query pane"))
+        lines.append(binding(resolve_display_key("focus_results") or "r", "Focus Results pane"))
         lines.append(binding(leader_key, "Open command menu"))
         lines.append(binding("?", "Show this help"))
         lines.append("")

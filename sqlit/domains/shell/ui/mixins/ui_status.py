@@ -97,6 +97,8 @@ class UIStatusMixin:
         )
         explorer_label = "Direct connection" if direct_active else "Explorer"
 
+        from sqlit.core.state_base import resolve_display_key
+
         def set_title(pane: Any, key: str, label: str, *, active: bool) -> None:
             if active and dialog_open:
                 # Active pane with dialog: key matches border (disabled), title stays primary
@@ -109,9 +111,13 @@ class UIStatusMixin:
                 # Inactive pane: key and title match border color via CSS
                 pane.border_title = f"\\[{key}] {label}"
 
-        set_title(pane_explorer, "e", explorer_label, active=active_pane == "explorer")
-        set_title(pane_query, "q", "Query", active=active_pane == "query")
-        set_title(pane_results, "r", "Results", active=active_pane == "results")
+        explorer_key = resolve_display_key("focus_explorer") or "e"
+        query_key = resolve_display_key("focus_query") or "q"
+        results_key = resolve_display_key("focus_results") or "r"
+
+        set_title(pane_explorer, explorer_key, explorer_label, active=active_pane == "explorer")
+        set_title(pane_query, query_key, "Query", active=active_pane == "query")
+        set_title(pane_results, results_key, "Results", active=active_pane == "results")
 
     def _update_vim_mode_visuals(self: UINavigationMixinHost) -> None:
         """Update all visual indicators based on current vim mode.

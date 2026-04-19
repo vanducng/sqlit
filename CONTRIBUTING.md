@@ -262,3 +262,7 @@ sqlit should provide fun and a feeling of mastery and satisfaction for those who
 **Example:**
 <e> = explorer pane, <q> = query pane, <r> = results pane.
 Rationale: E;Q;R satisfies both intuitiveness (each binding is the first letter of the pane), harmony (proximity: qwerty speaks for itself)
+
+#### Rebindable actions whitelist
+
+User-facing keymap overrides live in `settings.json` under `keymap.overrides`. The allowlist is `REBINDABLE_ACTIONS` in `sqlit/core/keymap.py`. Expanding it is a deliberate UX decision — don't widen without a brainstorm, since most keys (motions, chords, leader menus) have structural assumptions.

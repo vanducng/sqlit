@@ -574,6 +574,15 @@ def main() -> int:
     docker_subparsers = docker_parser.add_subparsers(dest="docker_command", help="Docker commands")
     docker_subparsers.add_parser("list", help="List detected database containers")
 
+    # Config management
+    config_parser = subparsers.add_parser("config", help="Manage sqlit configuration")
+    config_subparsers = config_parser.add_subparsers(dest="config_command", help="Config commands")
+    config_subparsers.add_parser("edit", help="Open settings.json in $EDITOR")
+    config_subparsers.add_parser(
+        "show-keymap",
+        help="Print resolved keymap, flagging overrides",
+    )
+
     log_startup_step("cli_parser_end")
 
     with startup_span("cli_parse_args"):
@@ -585,6 +594,13 @@ def main() -> int:
 
     with startup_span("services_build"):
         services = build_app_services(runtime)
+
+    # `config` subcommands build their own provider; skip the global install
+    # to avoid building ConfigurableKeymapProvider twice (duplicate warnings).
+    if args.command != "config":
+        with startup_span("keymap_config"):
+            _apply_keymap_overrides()
+
     if args.command is None:
         from sqlit.domains.connections.app.url_parser import parse_connection_url
         with startup_span("import_ssmstui"):
@@ -712,8 +728,35 @@ def main() -> int:
             docker_parser.print_help()
             return 1
 
+    if args.command == "config":
+        return _dispatch_config(args, config_parser)
+
     parser.print_help()
     return 1
+
+
+def _apply_keymap_overrides() -> None:
+    """Install the ``ConfigurableKeymapProvider`` iff settings.json has overrides."""
+    from sqlit.core.configurable_keymap import (
+        ConfigurableKeymapProvider,
+        load_overrides_from_settings,
+    )
+    from sqlit.core.keymap import set_keymap
+
+    overrides = load_overrides_from_settings()
+    if overrides:
+        set_keymap(ConfigurableKeymapProvider(overrides))
+
+
+def _dispatch_config(args: argparse.Namespace, config_parser: argparse.ArgumentParser) -> int:
+    from sqlit.domains.shell.cli.config import run_edit, run_show_keymap
+
+    if args.config_command == "edit":
+        return run_edit()
+    if args.config_command == "show-keymap":
+        return run_show_keymap()
+    config_parser.print_help()
+    return 0
 
 
 def _build_temp_connection(args: argparse.Namespace) -> ConnectionConfig | None:
