@@ -310,7 +310,7 @@ Most of the time you can just run `sqlit` and connect. If a Python driver is mis
 | Snowflake                           | `snowflake-connector-python` | `pipx inject sqlit-tui snowflake-connector-python` | `python -m pip install snowflake-connector-python` |
 | Firebird                            | `firebirdsql`                | `pipx inject sqlit-tui firebirdsql`                | `python -m pip install firebirdsql`                |
 | Athena                              | `pyathena`                   | `pipx inject sqlit-tui pyathena`                   | `python -m pip install pyathena`                   |
-| BigQuery                            | `google-cloud-bigquery`      | `pipx inject sqlit-tui google-cloud-bigquery`      | `python -m pip install google-cloud-bigquery`      |
+| BigQuery                            | `google-cloud-bigquery` + `google-cloud-bigquery-storage` + `pyarrow` | `pipx inject sqlit-tui google-cloud-bigquery google-cloud-bigquery-storage pyarrow` | `python -m pip install google-cloud-bigquery google-cloud-bigquery-storage pyarrow` |
 | Spanner                             | `google-cloud-spanner`       | `pipx inject sqlit-tui google-cloud-spanner`       | `python -m pip install google-cloud-spanner`       |
 | Apache Arrow Flight SQL             | `adbc-driver-flightsql`      | `pipx inject sqlit-tui adbc-driver-flightsql`      | `python -m pip install adbc-driver-flightsql`      |
 | Apache Impala                       | `impyla`                     | `pipx inject sqlit-tui impyla`                     | `python -m pip install impyla`                     |

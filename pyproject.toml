@@ -48,6 +48,8 @@ all = [
     "trino>=0.329.0",
     "presto-python-client>=0.8.4",
     "google-cloud-bigquery",
+    "google-cloud-bigquery-storage",
+    "pyarrow",
     "google-cloud-spanner>=3.0.0",
     "duckdb>=1.1.0",  # min avoids known CVEs
     "clickhouse-connect>=0.7.0",
@@ -75,7 +77,11 @@ hana = ["hdbcli>=2.20.0"]
 teradata = ["teradatasql>=20.0.0"]
 trino = ["trino>=0.329.0"]
 presto = ["presto-python-client>=0.8.4"]
-bigquery = ["google-cloud-bigquery"]
+bigquery = [
+    "google-cloud-bigquery",
+    "google-cloud-bigquery-storage",  # parallel reads via Storage Read API
+    "pyarrow",                        # required by Storage API for Arrow batches
+]
 spanner = ["google-cloud-spanner>=3.0.0"]
 redshift = ["redshift-connector"]
 duckdb = ["duckdb>=1.1.0"]  # min avoids known CVEs
