@@ -22,10 +22,17 @@ class ChainedTunnel:
         return int(self._inner.local_bind_port)
 
     def stop(self) -> None:
+        inner_exc = None
         try:
             self._inner.stop()
-        finally:
+        except Exception as e:
+            inner_exc = e
+        try:
             self._outer.stop()
+        except Exception:
+            pass  # Don't mask inner exception
+        if inner_exc:
+            raise inner_exc
 
 
 def ensure_ssh_tunnel_available() -> None:
@@ -133,7 +140,8 @@ def _create_from_alias(config: ConnectionConfig, endpoint: Any) -> tuple[Any, st
         except Exception:
             outer.stop()
             raise
-        return ChainedTunnel(outer, inner), "127.0.0.1", inner.local_bind_port
+        chain = ChainedTunnel(outer, inner)
+        return chain, "127.0.0.1", chain.local_bind_port
 
     tunnel = SSHTunnelForwarder(
         (target.hostname, target.port),

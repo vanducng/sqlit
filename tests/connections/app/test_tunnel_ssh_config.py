@@ -6,6 +6,8 @@ from unittest import mock
 
 import pytest
 
+pytest.importorskip("sshtunnel", reason="ssh extra not installed")
+
 
 class TestTunnelManualPath:
     """Tests for manual SSH tunnel (existing behavior unchanged)."""
@@ -29,23 +31,22 @@ class TestTunnelManualPath:
             ),
         )
 
-        with mock.patch("sshtunnel.SSHTunnelForwarder") as MockForwarder:
-            with mock.patch("pathlib.Path.exists", return_value=True):
-                mock_tunnel = mock.MagicMock()
-                mock_tunnel.local_bind_port = 54321
-                MockForwarder.return_value = mock_tunnel
+        with mock.patch("sshtunnel.SSHTunnelForwarder") as MockForwarder, mock.patch("pathlib.Path.exists", return_value=True):
+            mock_tunnel = mock.MagicMock()
+            mock_tunnel.local_bind_port = 54321
+            MockForwarder.return_value = mock_tunnel
 
-                from sqlit.domains.connections.app.tunnel import create_ssh_tunnel
+            from sqlit.domains.connections.app.tunnel import create_ssh_tunnel
 
-                tunnel, host, port = create_ssh_tunnel(config)
+            _tunnel, host, port = create_ssh_tunnel(config)
 
-                MockForwarder.assert_called_once()
-                call_args = MockForwarder.call_args
-                assert call_args[0][0] == ("bastion.example.com", 22)
-                assert call_args[1]["ssh_username"] == "ec2-user"
-                assert call_args[1]["ssh_pkey"] == "/home/user/.ssh/id_rsa"
-                assert host == "127.0.0.1"
-                assert port == 54321
+            MockForwarder.assert_called_once()
+            call_args = MockForwarder.call_args
+            assert call_args[0][0] == ("bastion.example.com", 22)
+            assert call_args[1]["ssh_username"] == "ec2-user"
+            assert call_args[1]["ssh_pkey"] == "/home/user/.ssh/id_rsa"
+            assert host == "127.0.0.1"
+            assert port == 54321
 
 
 class TestTunnelConfigMode:
@@ -85,7 +86,7 @@ class TestTunnelConfigMode:
 
                 from sqlit.domains.connections.app.tunnel import create_ssh_tunnel
 
-                tunnel, host, port = create_ssh_tunnel(config)
+                _tunnel, host, port = create_ssh_tunnel(config)
 
                 mock_resolve.assert_called_once_with("bastion")
                 MockForwarder.assert_called_once()
@@ -142,7 +143,7 @@ class TestTunnelConfigMode:
 
                 from sqlit.domains.connections.app.tunnel import create_ssh_tunnel
 
-                tunnel, host, port = create_ssh_tunnel(config)
+                _tunnel, host, port = create_ssh_tunnel(config)
 
                 assert mock_resolve.call_count == 2
                 assert MockForwarder.call_count == 2
@@ -272,7 +273,7 @@ class TestTunnelConfigMode:
 
                 from sqlit.domains.connections.app.tunnel import create_ssh_tunnel
 
-                tunnel, host, port = create_ssh_tunnel(config)
+                _tunnel, _host, _port = create_ssh_tunnel(config)
 
                 call_args = MockForwarder.call_args
                 assert call_args[1].get("ssh_pkey") is None
