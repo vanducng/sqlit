@@ -5,10 +5,8 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from unittest import mock
 
 import pytest
-
 
 SSH_CONFIG_FIXTURE = """\
 # Global settings
@@ -70,7 +68,7 @@ class TestListAliases:
     """Tests for list_aliases function."""
 
     def test_list_aliases_parses_fixture(self, ssh_config_file: Path):
-        """Should parse fixture and return 8 aliases (excluding wildcards)."""
+        """Should parse fixture and return 6 aliases (excluding wildcards)."""
         from sqlit.domains.connections.app.ssh_config import list_aliases
 
         aliases = list_aliases(ssh_config_file)

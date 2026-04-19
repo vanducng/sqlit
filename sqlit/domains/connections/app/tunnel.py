@@ -100,7 +100,11 @@ def _create_from_manual(config: ConnectionConfig, endpoint: Any) -> tuple[Any, s
 
 
 def _create_from_alias(config: ConnectionConfig, endpoint: Any) -> tuple[Any, str, int]:
-    """Create SSH tunnel from ~/.ssh/config alias."""
+    """Create SSH tunnel from ~/.ssh/config alias.
+
+    NOTE: Only single-hop ProxyJump supported. Nested ProxyJump on the jump host
+    is ignored. ProxyJump must be a bare alias (user@host:port syntax unsupported).
+    """
     from sshtunnel import SSHTunnelForwarder
 
     from sqlit.domains.connections.app import ssh_config as ssh_cfg
@@ -109,6 +113,7 @@ def _create_from_alias(config: ConnectionConfig, endpoint: Any) -> tuple[Any, st
     remote = (endpoint.host, int(endpoint.port) if endpoint.port else 0)
 
     if target.proxyjump:
+        # Single hop only — jump.proxyjump is not consulted
         jump = ssh_cfg.resolve(target.proxyjump)
         outer = SSHTunnelForwarder(
             (jump.hostname, jump.port),

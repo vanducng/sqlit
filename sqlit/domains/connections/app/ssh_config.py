@@ -5,10 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    pass
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -30,6 +27,21 @@ class SSHAliasNotFoundError(Exception):
 def _has_wildcard(host: str) -> bool:
     """Check if host contains wildcard characters."""
     return any(c in host for c in ("*", "?", "!"))
+
+
+def _to_alias_info(name: str, lookup: dict[str, Any]) -> AliasInfo:
+    """Convert paramiko lookup dict to AliasInfo."""
+    hostname = lookup.get("hostname", name)
+    user = lookup.get("user")
+    port_str = lookup.get("port", "22")
+    try:
+        port = int(port_str)
+    except (ValueError, TypeError):
+        port = 22
+    identityfiles = lookup.get("identityfile", [])
+    identityfile = os.path.expanduser(identityfiles[0]) if identityfiles else None
+    proxyjump = lookup.get("proxyjump")
+    return AliasInfo(name=name, hostname=hostname, user=user, port=port, identityfile=identityfile, proxyjump=proxyjump)
 
 
 def list_aliases(config_path: str | Path = "~/.ssh/config") -> list[AliasInfo]:
@@ -55,32 +67,7 @@ def list_aliases(config_path: str | Path = "~/.ssh/config") -> list[AliasInfo]:
     for hostname in config.get_hostnames():
         if _has_wildcard(hostname):
             continue
-
-        lookup = config.lookup(hostname)
-        resolved_hostname = lookup.get("hostname", hostname)
-        user = lookup.get("user")
-        port_str = lookup.get("port", "22")
-        try:
-            port = int(port_str)
-        except (ValueError, TypeError):
-            port = 22
-
-        identityfiles = lookup.get("identityfile", [])
-        identityfile = os.path.expanduser(identityfiles[0]) if identityfiles else None
-
-        proxyjump = lookup.get("proxyjump")
-
-        aliases.append(
-            AliasInfo(
-                name=hostname,
-                hostname=resolved_hostname,
-                user=user,
-                port=port,
-                identityfile=identityfile,
-                proxyjump=proxyjump,
-            )
-        )
-
+        aliases.append(_to_alias_info(hostname, config.lookup(hostname)))
     return aliases
 
 
@@ -115,25 +102,4 @@ def resolve(alias: str, config_path: str | Path = "~/.ssh/config") -> AliasInfo:
     if alias not in hostnames:
         raise SSHAliasNotFoundError(f"Alias '{alias}' not found in {path}")
 
-    lookup = config.lookup(alias)
-    resolved_hostname = lookup.get("hostname", alias)
-    user = lookup.get("user")
-    port_str = lookup.get("port", "22")
-    try:
-        port = int(port_str)
-    except (ValueError, TypeError):
-        port = 22
-
-    identityfiles = lookup.get("identityfile", [])
-    identityfile = os.path.expanduser(identityfiles[0]) if identityfiles else None
-
-    proxyjump = lookup.get("proxyjump")
-
-    return AliasInfo(
-        name=alias,
-        hostname=resolved_hostname,
-        user=user,
-        port=port,
-        identityfile=identityfile,
-        proxyjump=proxyjump,
-    )
+    return _to_alias_info(alias, config.lookup(alias))
