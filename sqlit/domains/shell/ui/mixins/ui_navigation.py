@@ -60,8 +60,8 @@ class UINavigationMixin(UIStatusMixin, UILeaderMixin):
     def action_focus_explorer(self: UINavigationMixinHost) -> None:
         """Focus the Explorer pane."""
         self._clear_count_buffer()  # Clear any pending count prefix
-        if self._fullscreen_mode != "none":
-            self._set_fullscreen_mode("none")
+        if self._fullscreen_mode not in ("none", "explorer"):
+            self._set_fullscreen_mode("explorer")
         # Unhide explorer if hidden
         if self.screen.has_class("explorer-hidden"):
             self.screen.remove_class("explorer-hidden")
@@ -76,8 +76,8 @@ class UINavigationMixin(UIStatusMixin, UILeaderMixin):
         from sqlit.core.vim import VimMode
 
         self._clear_count_buffer()  # Clear any pending count prefix
-        if self._fullscreen_mode != "none":
-            self._set_fullscreen_mode("none")
+        if self._fullscreen_mode not in ("none", "query"):
+            self._set_fullscreen_mode("query")
         self.vim_mode = VimMode.NORMAL
         self.query_input.read_only = True
         self.query_input.focus()
@@ -86,8 +86,8 @@ class UINavigationMixin(UIStatusMixin, UILeaderMixin):
     def action_focus_results(self: UINavigationMixinHost) -> None:
         """Focus the Results pane."""
         self._clear_count_buffer()  # Clear any pending count prefix
-        if self._fullscreen_mode != "none":
-            self._set_fullscreen_mode("none")
+        if self._fullscreen_mode not in ("none", "results"):
+            self._set_fullscreen_mode("results")
         if self.results_area.has_class("stacked-mode"):
             try:
                 from sqlit.shared.ui.widgets import SqlitDataTable
