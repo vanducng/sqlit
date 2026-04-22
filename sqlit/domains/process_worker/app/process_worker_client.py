@@ -41,22 +41,31 @@ class ProcessWorkerClient:
         self._process = None
         # Tempfile receives the worker's stderr; we tail it when surfacing
         # pipe-closed errors so segfaults/import-time crashes aren't silent.
-        self._stderr_log = tempfile.NamedTemporaryFile(
-            prefix="sqlit-worker-", suffix=".log", delete=False, mode="w"
-        )
-        self._stderr_log.close()
-        self._stderr_log_path: str | None = self._stderr_log.name
+        # Created up-front because we pass the path into the spawn args.
+        # If spawning fails we unlink it in the `except` below — otherwise a
+        # failed init leaves orphaned `sqlit-worker-*.log` files on disk.
+        fd, self._stderr_log_path = tempfile.mkstemp(prefix="sqlit-worker-", suffix=".log")
+        os.close(fd)
         try:
-            self._start_with_context(get_context("spawn"))
-        except Exception as exc:
-            self._maybe_fallback_start(exc)
-        self._send_lock = threading.Lock()
-        self._execute_lock = threading.Lock()
-        self._next_id = 1
-        self._closed = False
-        self._current_id: int | None = None
-        if self._conn is None or self._process is None:
-            raise RuntimeError("Failed to start process worker.")
+            try:
+                self._start_with_context(get_context("spawn"))
+            except Exception as exc:
+                self._maybe_fallback_start(exc)
+            self._send_lock = threading.Lock()
+            self._execute_lock = threading.Lock()
+            self._next_id = 1
+            self._closed = False
+            self._current_id: int | None = None
+            if self._conn is None or self._process is None:
+                raise RuntimeError("Failed to start process worker.")
+        except BaseException:
+            if self._stderr_log_path:
+                try:
+                    os.unlink(self._stderr_log_path)
+                except Exception:
+                    pass
+                self._stderr_log_path = None
+            raise
 
     def _start_with_context(self, ctx: Any) -> None:
         parent_conn, child_conn = ctx.Pipe(duplex=True)

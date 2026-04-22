@@ -503,7 +503,9 @@ def run_process_worker(conn: Connection, stderr_log_path: str | None = None) -> 
 
     if stderr_log_path:
         try:
-            stderr_file = open(stderr_log_path, "w", buffering=1)  # noqa: SIM115 — kept open for subprocess lifetime
+            # Kept open for the subprocess lifetime (file is written to on
+            # every stderr emission and closed by process teardown).
+            stderr_file = open(stderr_log_path, "w", buffering=1)
             sys.stderr = stderr_file
         except Exception:
             pass
@@ -531,11 +533,14 @@ def run_process_worker(conn: Connection, stderr_log_path: str | None = None) -> 
                 except Exception as exc:
                     # Any uncaught failure in message dispatch must not kill
                     # the worker — the client would see a silent BrokenPipe
-                    # on the next send. Report the failure instead.
+                    # on the next send. Report the failure instead. Guard
+                    # against a malformed `message` (non-dict) that could
+                    # have triggered the exception in the first place.
+                    safe_message = message if isinstance(message, dict) else {}
                     state.send(
                         {
                             "type": "error",
-                            "id": int(message.get("id", 0)),
+                            "id": int(safe_message.get("id", 0)),
                             "message": f"{type(exc).__name__}: {exc}",
                         }
                     )
