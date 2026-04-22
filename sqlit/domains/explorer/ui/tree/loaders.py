@@ -120,6 +120,7 @@ def load_columns_async(host: TreeMixinHost, node: Any, data: TableNode | ViewNod
             else:
                 client = None
 
+            worker_outcome_error: str | None = None
             if client is not None and hasattr(client, "list_columns") and host.current_config is not None:
                 outcome = await asyncio.to_thread(
                     client.list_columns,
@@ -128,12 +129,19 @@ def load_columns_async(host: TreeMixinHost, node: Any, data: TableNode | ViewNod
                     schema=schema_name,
                     name=obj_name,
                 )
-                if getattr(outcome, "error", None):
-                    raise RuntimeError(outcome.error)
                 if getattr(outcome, "cancelled", False):
                     return
-                columns = outcome.columns or []
-            else:
+                worker_outcome_error = getattr(outcome, "error", None)
+                if worker_outcome_error is None:
+                    columns = outcome.columns or []
+                elif getattr(client, "is_closed", False):
+                    disable = getattr(host, "_disable_process_worker_for_session", None)
+                    if callable(disable):
+                        disable(worker_outcome_error)
+                else:
+                    raise RuntimeError(worker_outcome_error)
+
+            if client is None or worker_outcome_error is not None:
                 schema_service = host._get_schema_service()
                 if schema_service:
                     columns = await asyncio.to_thread(
@@ -221,6 +229,7 @@ def load_folder_async(host: TreeMixinHost, node: Any, data: FolderNode) -> None:
             if use_worker and hasattr(host, "_get_process_worker_client_async"):
                 client = await host._get_process_worker_client_async()  # type: ignore[attr-defined]
 
+            worker_outcome_error: str | None = None
             if client is not None and hasattr(client, "list_folder_items") and host.current_config is not None:
                 outcome = await asyncio.to_thread(
                     client.list_folder_items,
@@ -230,11 +239,19 @@ def load_folder_async(host: TreeMixinHost, node: Any, data: FolderNode) -> None:
                 )
                 if getattr(outcome, "cancelled", False):
                     return
-                error = getattr(outcome, "error", None)
-                if error:
-                    raise RuntimeError(error)
-                items = outcome.items or []
-            else:
+                worker_outcome_error = getattr(outcome, "error", None)
+                if worker_outcome_error is None:
+                    items = outcome.items or []
+                elif getattr(client, "is_closed", False):
+                    # Worker died — transparently disable it for the session
+                    # and retry in-process so the user never sees the crash.
+                    disable = getattr(host, "_disable_process_worker_for_session", None)
+                    if callable(disable):
+                        disable(worker_outcome_error)
+                else:
+                    raise RuntimeError(worker_outcome_error)
+
+            if client is None or worker_outcome_error is not None:
                 schema_service = host._get_schema_service()
                 if schema_service:
                     items = await asyncio.to_thread(
