@@ -36,6 +36,14 @@ class TreeOnTableState(State):
             )
         )
         seen.add("refresh_tree")
+        left.append(
+            DisplayBinding(
+                key=resolve_display_key("ty_leader_key") or "y",
+                label="Copy",
+                action="ty_leader_key",
+            )
+        )
+        seen.add("ty_leader_key")
 
         if self.parent:
             parent_left, _ = self.parent.get_display_bindings(app)
