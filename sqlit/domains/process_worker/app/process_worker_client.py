@@ -35,8 +35,17 @@ class ProcessWorkerClient:
     """Runs queries in a separate process."""
 
     def __init__(self) -> None:
+        import tempfile
+
         self._conn: Connection | None = None
         self._process = None
+        # Tempfile receives the worker's stderr; we tail it when surfacing
+        # pipe-closed errors so segfaults/import-time crashes aren't silent.
+        self._stderr_log = tempfile.NamedTemporaryFile(
+            prefix="sqlit-worker-", suffix=".log", delete=False, mode="w"
+        )
+        self._stderr_log.close()
+        self._stderr_log_path: str | None = self._stderr_log.name
         try:
             self._start_with_context(get_context("spawn"))
         except Exception as exc:
@@ -54,10 +63,32 @@ class ProcessWorkerClient:
         self._conn = parent_conn
         self._process = ctx.Process(
             target=run_process_worker,
-            args=(child_conn,),
+            args=(child_conn, self._stderr_log_path),
             daemon=True,
         )
         self._process.start()
+
+    def _worker_death_reason(self) -> str:
+        """Summarize why the worker subprocess is unreachable."""
+        parts: list[str] = []
+        process = self._process
+        if process is not None:
+            exitcode = getattr(process, "exitcode", None)
+            if exitcode is not None:
+                parts.append(f"worker exit code {exitcode}")
+        path = self._stderr_log_path
+        if path:
+            try:
+                with open(path) as fh:
+                    tail = fh.read().strip()
+                if tail:
+                    # Keep the message short enough to fit in a notify popup.
+                    if len(tail) > 400:
+                        tail = "..." + tail[-400:]
+                    parts.append(tail)
+            except Exception:
+                pass
+        return "; ".join(parts) if parts else "worker subprocess terminated unexpectedly"
 
     def _maybe_fallback_start(self, error: Exception) -> None:
         if not isinstance(error, ValueError):
@@ -90,6 +121,14 @@ class ProcessWorkerClient:
                 self._process.join(timeout=1)
             if self._process.is_alive():
                 self._process.terminate()
+        # Best-effort cleanup of the stderr log file.
+        path = self._stderr_log_path
+        self._stderr_log_path = None
+        if path:
+            try:
+                os.unlink(path)
+            except Exception:
+                pass
 
     def cancel_current(self) -> None:
         query_id = self._current_id
@@ -119,8 +158,10 @@ class ProcessWorkerClient:
             }
             try:
                 self._send(payload)
-            except WorkerPipeClosedError as exc:
-                return ProcessQueryOutcome(result=None, elapsed_ms=0, error=str(exc))
+            except WorkerPipeClosedError:
+                return ProcessQueryOutcome(
+                    result=None, elapsed_ms=0, error=self._worker_death_reason()
+                )
 
             try:
                 while True:
@@ -128,7 +169,9 @@ class ProcessWorkerClient:
                         message = self._conn.recv()
                     except (EOFError, BrokenPipeError, OSError):
                         self._closed = True
-                        return ProcessQueryOutcome(result=None, elapsed_ms=0, error="Worker connection closed.")
+                        return ProcessQueryOutcome(
+                            result=None, elapsed_ms=0, error=self._worker_death_reason()
+                        )
                     if message.get("id") != query_id:
                         continue
                     msg_type = message.get("type")
@@ -176,8 +219,8 @@ class ProcessWorkerClient:
             }
             try:
                 self._send(payload)
-            except WorkerPipeClosedError as exc:
-                return ProcessSchemaOutcome(columns=None, error=str(exc))
+            except WorkerPipeClosedError:
+                return ProcessSchemaOutcome(columns=None, error=self._worker_death_reason())
 
             try:
                 while True:
@@ -185,7 +228,7 @@ class ProcessWorkerClient:
                         message = self._conn.recv()
                     except (EOFError, BrokenPipeError, OSError):
                         self._closed = True
-                        return ProcessSchemaOutcome(columns=None, error="Worker connection closed.")
+                        return ProcessSchemaOutcome(columns=None, error=self._worker_death_reason())
                     if message.get("id") != query_id:
                         continue
                     msg_type = message.get("type")
@@ -230,8 +273,8 @@ class ProcessWorkerClient:
             }
             try:
                 self._send(payload)
-            except WorkerPipeClosedError as exc:
-                return ProcessFolderOutcome(items=None, error=str(exc))
+            except WorkerPipeClosedError:
+                return ProcessFolderOutcome(items=None, error=self._worker_death_reason())
 
             try:
                 while True:
@@ -239,7 +282,7 @@ class ProcessWorkerClient:
                         message = self._conn.recv()
                     except (EOFError, BrokenPipeError, OSError):
                         self._closed = True
-                        return ProcessFolderOutcome(items=None, error="Worker connection closed.")
+                        return ProcessFolderOutcome(items=None, error=self._worker_death_reason())
                     if message.get("id") != query_id:
                         continue
                     msg_type = message.get("type")

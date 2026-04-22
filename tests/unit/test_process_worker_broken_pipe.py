@@ -68,6 +68,7 @@ def _make_client_with_connection(conn: _FakeConnection, process: _FakeProcess | 
     client._next_id = 1
     client._closed = False
     client._current_id = None
+    client._stderr_log_path = None  # type: ignore[attr-defined]
     return client
 
 
@@ -149,6 +150,30 @@ class TestWorkerLoopResilience:
         thread.join(timeout=2.0)
         assert not thread.is_alive()
         parent_conn.close()
+
+
+class TestWorkerDeathReason:
+    def test_reason_includes_exit_code_and_stderr_tail(self, tmp_path: Any) -> None:
+        log = tmp_path / "stderr.log"
+        log.write_text("Traceback (most recent call last):\n  File x\nImportError: no module named 'psycopg'\n")
+
+        client = _make_client_with_connection(_FakeConnection(), _FakeProcess(alive=False))
+        client._stderr_log_path = str(log)  # type: ignore[attr-defined]
+        client._process._alive = False  # type: ignore[attr-defined]
+        # Simulate known exit code.
+        client._process.exitcode = 1  # type: ignore[attr-defined]
+
+        reason = client._worker_death_reason()
+        assert "exit code 1" in reason
+        assert "ImportError" in reason
+
+    def test_reason_falls_back_when_nothing_captured(self) -> None:
+        client = _make_client_with_connection(_FakeConnection(), _FakeProcess(alive=True))
+        client._stderr_log_path = None  # type: ignore[attr-defined]
+        client._process.exitcode = None  # type: ignore[attr-defined]
+
+        reason = client._worker_death_reason()
+        assert "terminated unexpectedly" in reason
 
 
 class TestWorkerStateSend:

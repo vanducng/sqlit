@@ -491,8 +491,22 @@ class _WorkerState:
         return provider
 
 
-def run_process_worker(conn: Connection) -> None:
-    """Process entrypoint for query execution."""
+def run_process_worker(conn: Connection, stderr_log_path: str | None = None) -> None:
+    """Process entrypoint for query execution.
+
+    `stderr_log_path`, if provided, redirects the subprocess's stderr to that
+    file so the parent can surface unexpected crashes (segfaults, import
+    errors, top-level tracebacks) when the pipe dies.
+    """
+    import sys
+    import traceback
+
+    if stderr_log_path:
+        try:
+            stderr_file = open(stderr_log_path, "w", buffering=1)  # noqa: SIM115 — kept open for subprocess lifetime
+            sys.stderr = stderr_file
+        except Exception:
+            pass
     state = _WorkerState(conn=conn)
     try:
         while True:
@@ -525,6 +539,12 @@ def run_process_worker(conn: Connection) -> None:
                             "message": f"{type(exc).__name__}: {exc}",
                         }
                     )
+    except BaseException:
+        # Any uncaught exception (including SystemExit) gets a traceback
+        # written to stderr before the subprocess exits — the parent reads
+        # this file to surface a useful error instead of "pipe closed".
+        traceback.print_exc()
+        raise
     finally:
         state._cancel_current(state.current_id or 0)
         state._close_tunnel()
