@@ -506,13 +506,25 @@ def run_process_worker(conn: Connection) -> None:
                 message_type = message.get("type")
                 if message_type == "shutdown":
                     break
-                if message_type in {"exec", "schema"}:
-                    if state.current_thread is not None and state.current_thread.is_alive():
-                        state._enqueue_message(message)
-                    else:
-                        state._handle_message(message)
-                elif message_type == "cancel":
-                    state._cancel_current(int(message.get("id", 0)))
+                try:
+                    if message_type in {"exec", "schema"}:
+                        if state.current_thread is not None and state.current_thread.is_alive():
+                            state._enqueue_message(message)
+                        else:
+                            state._handle_message(message)
+                    elif message_type == "cancel":
+                        state._cancel_current(int(message.get("id", 0)))
+                except Exception as exc:
+                    # Any uncaught failure in message dispatch must not kill
+                    # the worker — the client would see a silent BrokenPipe
+                    # on the next send. Report the failure instead.
+                    state.send(
+                        {
+                            "type": "error",
+                            "id": int(message.get("id", 0)),
+                            "message": f"{type(exc).__name__}: {exc}",
+                        }
+                    )
     finally:
         state._cancel_current(state.current_id or 0)
         state._close_tunnel()

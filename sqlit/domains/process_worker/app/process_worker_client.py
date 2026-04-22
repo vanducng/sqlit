@@ -17,6 +17,10 @@ from sqlit.domains.connections.providers.adapters.base import ColumnInfo
 from .process_worker import run_process_worker
 
 
+class WorkerPipeClosedError(RuntimeError):
+    """Raised when the worker subprocess has closed its end of the pipe."""
+
+
 @dataclass
 class ProcessQueryOutcome:
     """Outcome for a process-executed query."""
@@ -113,13 +117,17 @@ class ProcessWorkerClient:
                 "db_type": config.db_type,
                 "max_rows": max_rows,
             }
-            self._send(payload)
+            try:
+                self._send(payload)
+            except WorkerPipeClosedError as exc:
+                return ProcessQueryOutcome(result=None, elapsed_ms=0, error=str(exc))
 
             try:
                 while True:
                     try:
                         message = self._conn.recv()
-                    except EOFError:
+                    except (EOFError, BrokenPipeError, OSError):
+                        self._closed = True
                         return ProcessQueryOutcome(result=None, elapsed_ms=0, error="Worker connection closed.")
                     if message.get("id") != query_id:
                         continue
@@ -166,13 +174,17 @@ class ProcessWorkerClient:
                 "schema": schema,
                 "name": name,
             }
-            self._send(payload)
+            try:
+                self._send(payload)
+            except WorkerPipeClosedError as exc:
+                return ProcessSchemaOutcome(columns=None, error=str(exc))
 
             try:
                 while True:
                     try:
                         message = self._conn.recv()
-                    except EOFError:
+                    except (EOFError, BrokenPipeError, OSError):
+                        self._closed = True
                         return ProcessSchemaOutcome(columns=None, error="Worker connection closed.")
                     if message.get("id") != query_id:
                         continue
@@ -216,13 +228,17 @@ class ProcessWorkerClient:
                 "database": database,
                 "folder_type": folder_type,
             }
-            self._send(payload)
+            try:
+                self._send(payload)
+            except WorkerPipeClosedError as exc:
+                return ProcessFolderOutcome(items=None, error=str(exc))
 
             try:
                 while True:
                     try:
                         message = self._conn.recv()
-                    except EOFError:
+                    except (EOFError, BrokenPipeError, OSError):
+                        self._closed = True
                         return ProcessFolderOutcome(items=None, error="Worker connection closed.")
                     if message.get("id") != query_id:
                         continue
@@ -244,9 +260,27 @@ class ProcessWorkerClient:
 
     def _send(self, payload: dict[str, Any]) -> None:
         with self._send_lock:
-            if self._conn is None:
-                raise RuntimeError("Worker connection unavailable.")
-            self._conn.send(payload)
+            if self._closed or self._conn is None:
+                raise WorkerPipeClosedError("Worker connection unavailable.")
+            try:
+                self._conn.send(payload)
+            except (BrokenPipeError, EOFError, OSError) as exc:
+                # Pipe went away — worker subprocess likely died. Mark the
+                # client closed so follow-up calls short-circuit cleanly
+                # instead of stacking broken-pipe errors.
+                self._closed = True
+                raise WorkerPipeClosedError(f"Worker pipe closed: {exc}") from exc
+
+    @property
+    def is_closed(self) -> bool:
+        """Whether the pipe to the worker has been closed (dead worker)."""
+        if self._closed:
+            return True
+        process = self._process
+        if process is not None and not process.is_alive():
+            self._closed = True
+            return True
+        return False
 
 
 @dataclass

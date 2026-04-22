@@ -31,19 +31,27 @@ class ProcessWorkerLifecycleMixin(LifecycleHooksMixin):
     def _get_process_worker_client(self: QueryMixinHost) -> Any | None:
         client = getattr(self, "_process_worker_client", None)
         if client is not None:
-            try:
-                from sqlit.shared.core.debug_events import emit_debug_event
+            if getattr(client, "is_closed", False):
+                try:
+                    client.close()
+                except Exception:
+                    pass
+                self._process_worker_client = None
+                client = None
+            else:
+                try:
+                    from sqlit.shared.core.debug_events import emit_debug_event
 
-                emit_debug_event(
-                    "process_worker.use",
-                    category="process_worker",
-                    cached=True,
-                    path="sync",
-                )
-            except Exception:
-                pass
-            self._touch_process_worker()
-            return client
+                    emit_debug_event(
+                        "process_worker.use",
+                        category="process_worker",
+                        cached=True,
+                        path="sync",
+                    )
+                except Exception:
+                    pass
+                self._touch_process_worker()
+                return client
         start = None
         try:
             from sqlit.domains.process_worker.app.process_worker_client import ProcessWorkerClient
@@ -99,19 +107,29 @@ class ProcessWorkerLifecycleMixin(LifecycleHooksMixin):
 
         client = getattr(self, "_process_worker_client", None)
         if client is not None:
-            try:
-                from sqlit.shared.core.debug_events import emit_debug_event
+            if getattr(client, "is_closed", False):
+                # Cached worker has died — drop the stale handle so a fresh
+                # subprocess is spawned below instead of reusing a dead pipe.
+                try:
+                    client.close()
+                except Exception:
+                    pass
+                self._process_worker_client = None
+                client = None
+            else:
+                try:
+                    from sqlit.shared.core.debug_events import emit_debug_event
 
-                emit_debug_event(
-                    "process_worker.use",
-                    category="process_worker",
-                    cached=True,
-                    path="async",
-                )
-            except Exception:
-                pass
-            self._touch_process_worker()
-            return client
+                    emit_debug_event(
+                        "process_worker.use",
+                        category="process_worker",
+                        cached=True,
+                        path="async",
+                    )
+                except Exception:
+                    pass
+                self._touch_process_worker()
+                return client
         start = None
         try:
             from sqlit.domains.process_worker.app.process_worker_client import ProcessWorkerClient
