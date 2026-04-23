@@ -15,6 +15,7 @@ from ..tree import loaders as tree_loaders
 from ..tree import object_info as tree_object_info
 from .tree_labels import TreeLabelMixin
 from .tree_schema import TreeSchemaMixin
+from .tree_yank import TreeYankMixin
 
 if TYPE_CHECKING:
     from sqlit.domains.connections.app.session import ConnectionSession
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
 MIN_TIMER_DELAY_S = 0.001
 
 
-class TreeMixin(TreeSchemaMixin, TreeLabelMixin):
+class TreeMixin(TreeYankMixin, TreeSchemaMixin, TreeLabelMixin):
     """Mixin providing tree/explorer functionality."""
 
     _active_database: str | None = None

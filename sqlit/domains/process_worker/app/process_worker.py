@@ -491,8 +491,24 @@ class _WorkerState:
         return provider
 
 
-def run_process_worker(conn: Connection) -> None:
-    """Process entrypoint for query execution."""
+def run_process_worker(conn: Connection, stderr_log_path: str | None = None) -> None:
+    """Process entrypoint for query execution.
+
+    `stderr_log_path`, if provided, redirects the subprocess's stderr to that
+    file so the parent can surface unexpected crashes (segfaults, import
+    errors, top-level tracebacks) when the pipe dies.
+    """
+    import sys
+    import traceback
+
+    if stderr_log_path:
+        try:
+            # Kept open for the subprocess lifetime (file is written to on
+            # every stderr emission and closed by process teardown).
+            stderr_file = open(stderr_log_path, "w", buffering=1)
+            sys.stderr = stderr_file
+        except Exception:
+            pass
     state = _WorkerState(conn=conn)
     try:
         while True:
@@ -506,13 +522,34 @@ def run_process_worker(conn: Connection) -> None:
                 message_type = message.get("type")
                 if message_type == "shutdown":
                     break
-                if message_type in {"exec", "schema"}:
-                    if state.current_thread is not None and state.current_thread.is_alive():
-                        state._enqueue_message(message)
-                    else:
-                        state._handle_message(message)
-                elif message_type == "cancel":
-                    state._cancel_current(int(message.get("id", 0)))
+                try:
+                    if message_type in {"exec", "schema"}:
+                        if state.current_thread is not None and state.current_thread.is_alive():
+                            state._enqueue_message(message)
+                        else:
+                            state._handle_message(message)
+                    elif message_type == "cancel":
+                        state._cancel_current(int(message.get("id", 0)))
+                except Exception as exc:
+                    # Any uncaught failure in message dispatch must not kill
+                    # the worker — the client would see a silent BrokenPipe
+                    # on the next send. Report the failure instead. Guard
+                    # against a malformed `message` (non-dict) that could
+                    # have triggered the exception in the first place.
+                    safe_message = message if isinstance(message, dict) else {}
+                    state.send(
+                        {
+                            "type": "error",
+                            "id": int(safe_message.get("id", 0)),
+                            "message": f"{type(exc).__name__}: {exc}",
+                        }
+                    )
+    except BaseException:
+        # Any uncaught exception (including SystemExit) gets a traceback
+        # written to stderr before the subprocess exits — the parent reads
+        # this file to surface a useful error instead of "pipe closed".
+        traceback.print_exc()
+        raise
     finally:
         state._cancel_current(state.current_id or 0)
         state._close_tunnel()

@@ -19,6 +19,11 @@ REBINDABLE_ACTIONS: frozenset[str] = frozenset(
         "resize_pane_right",
         "resize_pane_up",
         "resize_pane_down",
+        "ty_leader_key",
+        "ty_yank_qualified",
+        "ty_yank_name",
+        "ty_yank_dotted",
+        "ty_yank_select",
     }
 )
 
@@ -362,6 +367,11 @@ class DefaultKeymapProvider(KeymapProvider):
             # tz tree z motion menu (vim-style zz/zc)
             LeaderCommandDef("z", "center_cursor", "Center on cursor", "Go to", menu="tz"),
             LeaderCommandDef("c", "collapse_tree", "Collapse all", "Actions", menu="tz"),
+            # ty tree yank menu (vim-style y for yank)
+            LeaderCommandDef("y", "yank_qualified", "Copy FQN (quoted)", "Copy", menu="ty"),
+            LeaderCommandDef("n", "yank_name", "Copy name", "Copy", menu="ty"),
+            LeaderCommandDef("q", "yank_dotted", "Copy qualified", "Copy", menu="ty"),
+            LeaderCommandDef("s", "yank_select", "Copy SELECT 100", "Copy", menu="ty"),
             # vy value view yank menu (tree mode)
             LeaderCommandDef("y", "value", "Copy value", "Copy", menu="vy"),
             LeaderCommandDef("f", "field", "Copy field", "Copy", menu="vy"),
@@ -389,6 +399,7 @@ class DefaultKeymapProvider(KeymapProvider):
             ActionKeyDef("m", "move_connection_to_folder", "tree"),
             ActionKeyDef("x", "disconnect", "tree"),
             ActionKeyDef("z", "tz_leader_key", "tree"),
+            ActionKeyDef("y", "ty_leader_key", "tree"),
             ActionKeyDef("j", "tree_cursor_down", "tree"),
             ActionKeyDef("down", "tree_cursor_down", "tree", primary=False),
             ActionKeyDef("k", "tree_cursor_up", "tree"),

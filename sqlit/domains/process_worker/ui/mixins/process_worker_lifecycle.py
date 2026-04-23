@@ -15,6 +15,11 @@ class ProcessWorkerLifecycleMixin(LifecycleHooksMixin):
     _process_worker_client_error: str | None = None
     _process_worker_last_used: float | None = None
     _process_worker_idle_timer: Any | None = None
+    # Latched to True once a worker dies in this session (segfault, SystemExit,
+    # broken pipe, …). Prevents respawning a worker that will just crash again
+    # and forces callers back onto the in-process fallback path.
+    _process_worker_disabled: bool = False
+    _process_worker_disabled_reason: str | None = None
 
     def _use_process_worker(self: QueryMixinHost, provider: Any) -> bool:
         runtime = getattr(self.services, "runtime", None)
@@ -22,28 +27,60 @@ class ProcessWorkerLifecycleMixin(LifecycleHooksMixin):
             return False
         if bool(getattr(getattr(runtime, "mock", None), "enabled", False)):
             return False
+        if getattr(self, "_process_worker_disabled", False):
+            return False
         try:
             from sqlit.domains.process_worker.app.support import supports_process_worker
         except Exception:
             return True
         return supports_process_worker(provider)
 
+    def _disable_process_worker_for_session(
+        self: QueryMixinHost, reason: str | None = None
+    ) -> None:
+        """Mark the worker unusable for the rest of the session.
+
+        Called when the subprocess dies unexpectedly so callers stop paying
+        a respawn cost and the user gets a silent fallback to the in-process
+        schema/query path instead of a repeating crash message.
+        """
+        self._process_worker_disabled = True
+        self._process_worker_disabled_reason = reason
+
     def _get_process_worker_client(self: QueryMixinHost) -> Any | None:
+        if getattr(self, "_process_worker_disabled", False):
+            return None
         client = getattr(self, "_process_worker_client", None)
         if client is not None:
-            try:
-                from sqlit.shared.core.debug_events import emit_debug_event
+            if getattr(client, "is_closed", False):
+                reason = None
+                death_reason = getattr(client, "_worker_death_reason", None)
+                if callable(death_reason):
+                    try:
+                        reason = death_reason()
+                    except Exception:
+                        pass
+                self._disable_process_worker_for_session(reason)
+                try:
+                    client.close()
+                except Exception:
+                    pass
+                self._process_worker_client = None
+                return None
+            else:
+                try:
+                    from sqlit.shared.core.debug_events import emit_debug_event
 
-                emit_debug_event(
-                    "process_worker.use",
-                    category="process_worker",
-                    cached=True,
-                    path="sync",
-                )
-            except Exception:
-                pass
-            self._touch_process_worker()
-            return client
+                    emit_debug_event(
+                        "process_worker.use",
+                        category="process_worker",
+                        cached=True,
+                        path="sync",
+                    )
+                except Exception:
+                    pass
+                self._touch_process_worker()
+                return client
         start = None
         try:
             from sqlit.domains.process_worker.app.process_worker_client import ProcessWorkerClient
@@ -97,21 +134,39 @@ class ProcessWorkerLifecycleMixin(LifecycleHooksMixin):
         import asyncio
         import sys
 
+        if getattr(self, "_process_worker_disabled", False):
+            return None
         client = getattr(self, "_process_worker_client", None)
         if client is not None:
-            try:
-                from sqlit.shared.core.debug_events import emit_debug_event
+            if getattr(client, "is_closed", False):
+                reason = None
+                death_reason = getattr(client, "_worker_death_reason", None)
+                if callable(death_reason):
+                    try:
+                        reason = death_reason()
+                    except Exception:
+                        pass
+                self._disable_process_worker_for_session(reason)
+                try:
+                    client.close()
+                except Exception:
+                    pass
+                self._process_worker_client = None
+                return None
+            else:
+                try:
+                    from sqlit.shared.core.debug_events import emit_debug_event
 
-                emit_debug_event(
-                    "process_worker.use",
-                    category="process_worker",
-                    cached=True,
-                    path="async",
-                )
-            except Exception:
-                pass
-            self._touch_process_worker()
-            return client
+                    emit_debug_event(
+                        "process_worker.use",
+                        category="process_worker",
+                        cached=True,
+                        path="async",
+                    )
+                except Exception:
+                    pass
+                self._touch_process_worker()
+                return client
         start = None
         try:
             from sqlit.domains.process_worker.app.process_worker_client import ProcessWorkerClient

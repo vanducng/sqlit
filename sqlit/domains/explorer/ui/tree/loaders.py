@@ -128,10 +128,15 @@ def load_columns_async(host: TreeMixinHost, node: Any, data: TableNode | ViewNod
                     schema=schema_name,
                     name=obj_name,
                 )
-                if getattr(outcome, "error", None):
-                    raise RuntimeError(outcome.error)
                 if getattr(outcome, "cancelled", False):
                     return
+                error = getattr(outcome, "error", None)
+                if error:
+                    if getattr(client, "is_closed", False):
+                        disable = getattr(host, "_disable_process_worker_for_session", None)
+                        if callable(disable):
+                            disable(error)
+                    raise RuntimeError(error)
                 columns = outcome.columns or []
             else:
                 schema_service = host._get_schema_service()
@@ -232,6 +237,15 @@ def load_folder_async(host: TreeMixinHost, node: Any, data: FolderNode) -> None:
                     return
                 error = getattr(outcome, "error", None)
                 if error:
+                    # If the worker died, latch it off so subsequent expands
+                    # fall through to the pre-existing in-process path via
+                    # `client is None`. The current request still reports the
+                    # real error so the user sees why the worker died
+                    # (SIGSEGV / traceback) instead of a silent mystery.
+                    if getattr(client, "is_closed", False):
+                        disable = getattr(host, "_disable_process_worker_for_session", None)
+                        if callable(disable):
+                            disable(error)
                     raise RuntimeError(error)
                 items = outcome.items or []
             else:
