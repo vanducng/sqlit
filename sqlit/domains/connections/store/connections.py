@@ -70,24 +70,31 @@ class ConnectionStore(JSONFileStore):
         if data is None:
             return []
         version, raw_connections, needs_migration = self._unpack_connections_payload(data)
-        try:
-            from sqlit.domains.connections.providers.config_service import normalize_connection_config
+        from sqlit.domains.connections.providers.catalog import get_provider
 
-            configs = []
-            for conn in raw_connections:
-                if not isinstance(conn, dict):
-                    continue
+        configs = []
+        for conn in raw_connections:
+            if not isinstance(conn, dict):
+                continue
+            # Isolate per-entry failures so one corrupt connection doesn't hide all the
+            # others. Skip normalization-validate at load time — validation belongs at
+            # save/connect, not load — so users can still see and repair entries with
+            # missing required fields (e.g. empty Host).
+            try:
                 config = ConnectionConfig.from_dict(conn)
-                config = normalize_connection_config(config)
+                try:
+                    provider = get_provider(config.db_type)
+                    config = provider.config_validator.normalize(config)
+                except Exception:
+                    pass
                 if load_credentials:
-                    # Retrieve passwords from credentials service
                     self._load_credentials(config)
-                configs.append(config)
-            if needs_migration:
-                self._migrate_connections_payload(raw_connections, version)
-            return configs
-        except (TypeError, KeyError):
-            return []
+            except (TypeError, KeyError, ValueError):
+                continue
+            configs.append(config)
+        if needs_migration:
+            self._migrate_connections_payload(raw_connections, version)
+        return configs
 
     def _unpack_connections_payload(self, data: object) -> tuple[int, list[dict], bool]:
         if isinstance(data, list):
