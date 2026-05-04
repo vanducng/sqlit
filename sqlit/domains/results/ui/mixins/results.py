@@ -9,6 +9,36 @@ from sqlit.shared.ui.protocols import ResultsMixinHost
 from sqlit.shared.ui.widgets import SqlitDataTable
 
 MIN_TIMER_DELAY_S = 0.001
+MAX_TRANSPOSE_ROWS = 10
+_MISSING: Any = object()
+
+
+def _transpose_coord(display_row: int, display_col: int) -> tuple[int, int] | None:
+    """Map a display (row, col) in transposed view to the original (row, col).
+
+    Display col 0 is the column-label strip — no original cell; returns None.
+    Otherwise: original_row = display_col - 1, original_col = display_row.
+    """
+    if display_col == 0:
+        return None
+    return (display_col - 1, display_row)
+
+
+def _compute_transposed_layout(
+    columns: list[str], rows: list[tuple]
+) -> tuple[list[str], list[tuple]]:
+    """Build the (columns, rows) a rebuilt table would receive under transpose.
+
+    - t_columns: ["column", "1", "2", ..., str(len(rows))]
+    - t_rows: one row per original column; each row is (col_name, *values_across_original_rows).
+    """
+    t_columns: list[str] = ["column", *[str(i + 1) for i in range(len(rows))]]
+    if not columns or not rows:
+        return t_columns, []
+    t_rows: list[tuple] = [
+        (columns[k], *[row[k] for row in rows]) for k in range(len(columns))
+    ]
+    return t_columns, t_rows
 
 
 class ResultsMixin:
@@ -20,6 +50,7 @@ class ResultsMixin:
     _tooltip_cell_coord: tuple[int, int] | None = None
     _tooltip_showing: bool = False
     _tooltip_timer: Any | None = None
+    _transposed_single: bool = False
 
     def _schedule_results_timer(self: ResultsMixinHost, delay_s: float, callback: Any) -> Any | None:
         set_timer = getattr(self, "set_timer", None)
@@ -206,6 +237,70 @@ class ResultsMixin:
                 return None, [], [], True
         return self.results_table, list(self._last_result_columns), list(self._last_result_rows), False
 
+    def _resolve_active_cell(
+        self: ResultsMixinHost, table: Any, section: Any | None
+    ) -> tuple[int, int] | None:
+        """Translate the DataTable cursor to an ORIGINAL (row, col).
+
+        Returns None when the cursor is on the column-label strip under
+        transposed view (display col 0); that callers should short-circuit
+        or apply a label-column-specific behavior.
+        """
+        transposed = (
+            section.transposed
+            if section is not None
+            else self._transposed_single
+        )
+        try:
+            dr = int(table.cursor_coordinate.row)
+            dc = int(table.cursor_coordinate.column)
+        except Exception:
+            return None
+        if not transposed:
+            return (dr, dc)
+        return _transpose_coord(dr, dc)
+
+    def _read_active_cell_value(
+        self: ResultsMixinHost,
+        table: Any,
+        section: Any | None,
+        columns: list[str],
+        rows: list[tuple],
+    ) -> Any:
+        """Read the value of the cell under the cursor from the source of truth.
+
+        Returns ``_MISSING`` if the cell can't be resolved (e.g. unknown cursor).
+        Under transpose, label-column (display col 0) maps to the column name.
+        """
+        transposed = (
+            section.transposed
+            if section is not None
+            else self._transposed_single
+        )
+        try:
+            dr = int(table.cursor_coordinate.row)
+            dc = int(table.cursor_coordinate.column)
+        except Exception:
+            return _MISSING
+        if transposed:
+            if dc == 0:
+                if dr < len(columns):
+                    return columns[dr]
+                return _MISSING
+            orig_row, orig_col = dc - 1, dr
+        else:
+            orig_row, orig_col = dr, dc
+        if orig_row >= len(rows) or orig_col >= len(columns):
+            # Fall back to DataTable for out-of-range (should be rare).
+            try:
+                return table.get_cell_at(table.cursor_coordinate)
+            except Exception:
+                return _MISSING
+        row = rows[orig_row]
+        if orig_col >= len(row):
+            return _MISSING
+        return row[orig_col]
+
     def _find_results_section(self: ResultsMixinHost, widget: Any) -> Any | None:
         """Find the ResultSection ancestor for a widget."""
         from sqlit.shared.ui.widgets_stacked_results import ResultSection
@@ -262,14 +357,17 @@ class ResultsMixin:
 
     def action_view_cell(self: ResultsMixinHost) -> None:
         """Preview the selected cell value (tooltip)."""
-        table, _columns, _rows, _stacked = self._get_active_results_context()
+        table, columns, rows, stacked = self._get_active_results_context()
         if not table or table.row_count <= 0:
             self.notify("No results", severity="warning")
             return
         try:
             cursor_coord = table.cursor_coordinate
-            value = table.get_cell_at(cursor_coord)
         except Exception:
+            return
+        section = self._find_results_section(table) if stacked else None
+        value = self._read_active_cell_value(table, section, columns, rows)
+        if value is _MISSING:
             return
 
         coord_key = (
@@ -288,22 +386,36 @@ class ResultsMixin:
         """View the full value of the selected cell inline."""
         from sqlit.shared.ui.widgets import InlineValueView
 
-        table, _columns, _rows, _stacked = self._get_active_results_context()
+        table, columns, rows, stacked = self._get_active_results_context()
         if not table or table.row_count <= 0:
             self.notify("No results", severity="warning")
             return
         try:
-            _cursor_row, cursor_col = table.cursor_coordinate
-            value = table.get_cell_at(table.cursor_coordinate)
+            cursor_row, cursor_col = table.cursor_coordinate
         except Exception:
+            return
+        section = self._find_results_section(table) if stacked else None
+        transposed = (
+            section.transposed
+            if section is not None
+            else self._transposed_single
+        )
+        value = self._read_active_cell_value(table, section, columns, rows)
+        if value is _MISSING:
             return
 
         self._hide_cell_tooltip(table)
 
-        # Get column name if available
+        # Get column name if available. Under transpose, the column name is
+        # indexed by the display row (which is the original column index).
         column_name = ""
-        if self._last_result_columns and cursor_col < len(self._last_result_columns):
-            column_name = self._last_result_columns[cursor_col]
+        effective_columns = columns or self._last_result_columns
+        if transposed:
+            if effective_columns and cursor_row < len(effective_columns):
+                column_name = effective_columns[cursor_row]
+        else:
+            if effective_columns and cursor_col < len(effective_columns):
+                column_name = effective_columns[cursor_col]
 
         # Show inline value view
         try:
@@ -438,13 +550,13 @@ class ResultsMixin:
 
     def action_copy_cell(self: ResultsMixinHost) -> None:
         """Copy the selected cell to clipboard (or internal clipboard)."""
-        table, _columns, _rows, _stacked = self._get_active_results_context()
+        table, columns, rows, stacked = self._get_active_results_context()
         if not table or table.row_count <= 0:
             self.notify("No results", severity="warning")
             return
-        try:
-            value = table.get_cell_at(table.cursor_coordinate)
-        except Exception:
+        section = self._find_results_section(table) if stacked else None
+        value = self._read_active_cell_value(table, section, columns, rows)
+        if value is _MISSING:
             return
         self._copy_text(str(value) if value is not None else "NULL")
         self._flash_table_yank(table, "cell")
@@ -511,11 +623,40 @@ class ResultsMixin:
         self._tooltip_showing = False
 
     def action_copy_row(self: ResultsMixinHost) -> None:
-        """Copy the selected row to clipboard (TSV)."""
-        table, _columns, _rows, _stacked = self._get_active_results_context()
+        """Copy the selected row to clipboard (TSV).
+
+        Under transpose, copies the column-vector (see ``action_ry_row``).
+        """
+        table, columns, rows, stacked = self._get_active_results_context()
         if not table or table.row_count <= 0:
             self.notify("No results", severity="warning")
             return
+        section = self._find_results_section(table) if stacked else None
+        transposed = (
+            section.transposed
+            if section is not None
+            else self._transposed_single
+        )
+        if transposed and columns:
+            dr = int(table.cursor_coordinate.row) if hasattr(
+                table.cursor_coordinate, "row"
+            ) else 0
+            dc = int(table.cursor_coordinate.column) if hasattr(
+                table.cursor_coordinate, "column"
+            ) else 0
+            if dc == 0:
+                vec = ("column", *columns)
+            else:
+                orig_col = dr
+                if orig_col >= len(columns):
+                    return
+                col_name = columns[orig_col]
+                vec = (col_name, *(row[orig_col] for row in rows))
+            text = self._format_tsv([], [vec])
+            self._copy_text(text)
+            self._flash_table_yank(table, "row")
+            return
+
         try:
             row_values = table.get_row_at(table.cursor_row)
         except Exception:
@@ -555,24 +696,56 @@ class ResultsMixin:
     def action_ry_cell(self: ResultsMixinHost) -> None:
         """Copy cell (from yank menu)."""
         self._clear_leader_pending()
-        table, _columns, _rows, _stacked = self._get_active_results_context()
+        table, columns, rows, stacked = self._get_active_results_context()
         if not table or table.row_count <= 0:
             self.notify("No results", severity="warning")
             return
-        try:
-            value = table.get_cell_at(table.cursor_coordinate)
-        except Exception:
+        section = self._find_results_section(table) if stacked else None
+        value = self._read_active_cell_value(table, section, columns, rows)
+        if value is _MISSING:
             return
         self._copy_text(str(value) if value is not None else "NULL")
         self._flash_table_yank(table, "cell")
 
     def action_ry_row(self: ResultsMixinHost) -> None:
-        """Copy row (from yank menu)."""
+        """Copy row (from yank menu).
+
+        Under transpose, a "row" in display space is the values of a single
+        original column across all original rows; the label column (display
+        col 0) copies the column-names vector.
+        """
         self._clear_leader_pending()
-        table, _columns, _rows, _stacked = self._get_active_results_context()
+        table, columns, rows, stacked = self._get_active_results_context()
         if not table or table.row_count <= 0:
             self.notify("No results", severity="warning")
             return
+        section = self._find_results_section(table) if stacked else None
+        transposed = (
+            section.transposed
+            if section is not None
+            else self._transposed_single
+        )
+        if transposed and columns:
+            dr = int(table.cursor_coordinate.row) if hasattr(
+                table.cursor_coordinate, "row"
+            ) else 0
+            dc = int(table.cursor_coordinate.column) if hasattr(
+                table.cursor_coordinate, "column"
+            ) else 0
+            if dc == 0:
+                # Label column: column names vector
+                vec = ("column", *columns)
+            else:
+                orig_col = dr
+                if orig_col >= len(columns):
+                    return
+                col_name = columns[orig_col]
+                vec = (col_name, *(row[orig_col] for row in rows))
+            text = self._format_tsv([], [vec])
+            self._copy_text(text)
+            self._flash_table_yank(table, "row")
+            return
+
         try:
             row_values = table.get_row_at(table.cursor_row)
         except Exception:
@@ -792,7 +965,7 @@ class ResultsMixin:
 
     def action_delete_row(self: ResultsMixinHost) -> None:
         """Generate a DELETE query for the selected row and enter insert mode."""
-        table, columns, _rows, _stacked = self._get_active_results_context()
+        table, columns, rows, _stacked = self._get_active_results_context()
         if not table or table.row_count <= 0:
             self.notify("No results", severity="warning")
             return
@@ -801,11 +974,28 @@ class ResultsMixin:
             self.notify("No column info", severity="warning")
             return
 
-        try:
-            cursor_row, _cursor_col = table.cursor_coordinate
-            row_values = table.get_row_at(cursor_row)
-        except Exception:
-            return
+        section = self._find_results_section(table) if _stacked else None
+        transposed = (
+            section.transposed
+            if section is not None
+            else self._transposed_single
+        )
+
+        if transposed:
+            coord = self._resolve_active_cell(table, section)
+            if coord is None:
+                self.notify("Select a data column", severity="warning")
+                return
+            orig_row, _orig_col = coord
+            if orig_row >= len(rows):
+                return
+            row_values = tuple(rows[orig_row])
+        else:
+            try:
+                cursor_row, _cursor_col = table.cursor_coordinate
+                row_values = table.get_row_at(cursor_row)
+            except Exception:
+                return
 
         # Format value for SQL
         def sql_value(v: object) -> str:
@@ -872,9 +1062,9 @@ class ResultsMixin:
         self.action_focus_query()
         self._update_footer_bindings()
 
-    def action_edit_cell(self: ResultsMixinHost) -> None:
+    def action_edit_cell(self: ResultsMixinHost) -> None:  # noqa: C901
         """Generate an UPDATE query for the selected cell and enter insert mode."""
-        table, columns, _rows, _stacked = self._get_active_results_context()
+        table, columns, rows, _stacked = self._get_active_results_context()
         if not table or table.row_count <= 0:
             self.notify("No results", severity="warning")
             return
@@ -883,11 +1073,28 @@ class ResultsMixin:
             self.notify("No column info", severity="warning")
             return
 
-        try:
-            cursor_row, cursor_col = table.cursor_coordinate
-            row_values = table.get_row_at(cursor_row)
-        except Exception:
-            return
+        section = self._find_results_section(table) if _stacked else None
+        transposed = (
+            section.transposed
+            if section is not None
+            else self._transposed_single
+        )
+
+        if transposed:
+            coord = self._resolve_active_cell(table, section)
+            if coord is None:
+                self.notify("Cannot edit column label", severity="warning")
+                return
+            orig_row, cursor_col = coord
+            if orig_row >= len(rows) or cursor_col >= len(columns):
+                return
+            row_values = tuple(rows[orig_row])
+        else:
+            try:
+                cursor_row, cursor_col = table.cursor_coordinate
+                row_values = table.get_row_at(cursor_row)
+            except Exception:
+                return
 
         # Get column name
         if cursor_col >= len(columns):
@@ -1060,3 +1267,53 @@ class ResultsMixin:
             section.focus()
         except Exception:
             pass
+
+    def action_toggle_results_transpose(self: ResultsMixinHost) -> None:
+        """Toggle transposed rendering of the focused result table."""
+        if getattr(self, "_results_filter_visible", False):
+            self.notify("Close filter first", severity="warning")
+            return
+
+        table, columns, rows, stacked = self._get_active_results_context()
+        if not table or not columns:
+            self.notify("No results", severity="warning")
+            return
+
+        section = self._find_results_section(table) if stacked else None
+        currently = (
+            section.transposed if stacked and section is not None else self._transposed_single
+        )
+        new_flag = not currently
+
+        if new_flag:
+            # Cap displayed original rows; source-of-truth rows list is untouched,
+            # so exports, re-toggle, and SQL generation still see the full set.
+            visible_rows = rows[:MAX_TRANSPOSE_ROWS]
+            disp_cols, disp_rows = _compute_transposed_layout(columns, visible_rows)
+            if len(rows) > MAX_TRANSPOSE_ROWS:
+                self.notify(
+                    f"Transposed first {MAX_TRANSPOSE_ROWS} of {len(rows)} rows",
+                    severity="information",
+                )
+        else:
+            disp_cols, disp_rows = columns, rows
+
+        old_info = getattr(table, "result_table_info", None)
+        if stacked and section is not None:
+            new_table = self._build_results_section_table(disp_cols, disp_rows, escape=True)
+            if old_info is not None:
+                new_table.result_table_info = old_info
+            was_focused = table.has_focus
+            section.mount(new_table, after=table)
+            table.remove()
+            section.transposed = new_flag
+            if was_focused:
+                new_table.focus()
+        else:
+            self._replace_results_table_with_data(disp_cols, disp_rows, escape=True)
+            if old_info is not None:
+                try:
+                    self.results_table.result_table_info = old_info
+                except Exception:
+                    pass
+            self._transposed_single = new_flag

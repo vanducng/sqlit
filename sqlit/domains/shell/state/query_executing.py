@@ -16,7 +16,7 @@ class QueryExecutingState(State):
         self.allows("quit")
 
     def get_display_bindings(self, app: InputContext) -> tuple[list[DisplayBinding], list[DisplayBinding]]:
-        key = resolve_display_key("cancel_operation") or "<esc>"
+        key = resolve_display_key("cancel_operation") or "<space>z"
         left: list[DisplayBinding] = [DisplayBinding(key=key, label="Cancel", action="cancel_operation")]
         return left, []
 

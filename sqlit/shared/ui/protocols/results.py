@@ -35,6 +35,7 @@ class ResultsStateProtocol(Protocol):
     _tooltip_showing: bool
     _tooltip_timer: Any | None
     _value_view_active: bool
+    _transposed_single: bool
     MAX_FILTER_MATCHES: int
 
 

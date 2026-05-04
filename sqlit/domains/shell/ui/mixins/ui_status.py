@@ -271,7 +271,7 @@ class UIStatusMixin:
         if getattr(self, "query_executing", False):
             from sqlit.core.state_base import resolve_display_key
 
-            cancel_key = resolve_display_key("cancel_operation") or "<esc>"
+            cancel_key = resolve_display_key("cancel_operation") or "<space>z"
             query_spinner = getattr(self, "_query_spinner", None)
             if query_spinner and query_spinner.running:
                 import time
