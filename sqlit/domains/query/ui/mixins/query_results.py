@@ -324,6 +324,7 @@ class QueryResultsMixin:
         # Fresh data arrived; drop any stashed pre-filter snapshot from a
         # previous committed filter so it won't leak into the new query.
         self._reset_filter_snapshots()
+        self._transposed_single = False
         table_info = getattr(self, "_pending_result_table_info", None)
 
         # Switch to single result mode (in case we were showing stacked results)

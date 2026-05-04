@@ -414,7 +414,6 @@ class DefaultKeymapProvider(KeymapProvider):
             # Global
             ActionKeyDef("space", "leader_key", "global", priority=True),
             ActionKeyDef("ctrl+q", "quit", "global"),
-            ActionKeyDef("escape", "cancel_operation", "global"),
             ActionKeyDef("question_mark", "show_help", "global"),
             # Query (normal mode)
             ActionKeyDef("i", "enter_insert_mode", "query_normal"),
@@ -547,6 +546,7 @@ class DefaultKeymapProvider(KeymapProvider):
             ActionKeyDef("tab", "next_result_section", "results"),
             ActionKeyDef("shift+tab", "prev_result_section", "results"),
             ActionKeyDef("z", "toggle_result_section", "results"),
+            ActionKeyDef("t", "toggle_results_transpose", "results"),
             ActionKeyDef("escape", "results_filter_close", "results_filter"),
             ActionKeyDef("enter", "results_filter_accept", "results_filter"),
             # Value view

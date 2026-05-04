@@ -36,6 +36,13 @@ class ResultsFocusedState(State):
         self.allows("results_column_picker", has_results)  # vim f/F
         self.allows("next_result_section", has_results, label="Next result", help="Next result section")
         self.allows("prev_result_section", has_results, label="Prev result", help="Previous result section")
+        self.allows(
+            "toggle_results_transpose",
+            has_results,
+            key="t",
+            label="Transpose",
+            help="Toggle transposed view (first 10 rows)",
+        )
 
     def get_display_bindings(self, app: InputContext) -> tuple[list[DisplayBinding], list[DisplayBinding]]:
         # No bindings when there are no results
@@ -115,6 +122,14 @@ class ResultsFocusedState(State):
                 action="results_filter",
             )
         )
+        if not is_error:
+            left.append(
+                DisplayBinding(
+                    key=resolve_display_key("toggle_results_transpose") or "t",
+                    label="Transpose",
+                    action="toggle_results_transpose",
+                )
+            )
         if app.stacked_result_count > 1:
             left.append(
                 DisplayBinding(
@@ -139,6 +154,7 @@ class ResultsFocusedState(State):
                 "results_yank_leader_key",
                 "clear_results",
                 "results_filter",
+                "toggle_results_transpose",
                 "next_result_section",
                 "prev_result_section",
             ]
