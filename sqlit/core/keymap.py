@@ -355,6 +355,7 @@ class DefaultKeymapProvider(KeymapProvider):
             # ry results yank menu
             LeaderCommandDef("c", "cell", "Copy cell", "Copy", menu="ry"),
             LeaderCommandDef("y", "row", "Copy row", "Copy", menu="ry"),
+            LeaderCommandDef("j", "row_json", "Copy row as JSON", "Copy", menu="ry"),
             LeaderCommandDef("a", "all", "Copy all", "Copy", menu="ry"),
             LeaderCommandDef("e", "export", "Export...", "Export", menu="ry"),
             # rye results export menu

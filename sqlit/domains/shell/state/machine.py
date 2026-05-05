@@ -16,7 +16,6 @@ from sqlit.core.leader_commands import get_leader_commands
 from sqlit.core.state_base import (
     ActionResult,
     DisplayBinding,
-    HelpEntry,
     State,
     resolve_display_key,
 )
@@ -36,8 +35,8 @@ from sqlit.domains.query.state import (
     QueryFocusedState,
     QueryInsertModeState,
     QueryNormalModeState,
-    QueryVisualModeState,
     QueryVisualLineModeState,
+    QueryVisualModeState,
 )
 from sqlit.domains.results.state import (
     ResultsFilterActiveState,
@@ -139,7 +138,6 @@ class UIStateMachine:
 
     def generate_help_text(self) -> str:
         """Generate structured help text with organized sections."""
-        from sqlit.core.keymap import format_key
 
         leader_key = resolve_display_key("leader_key") or "<space>"
 
@@ -283,6 +281,7 @@ class UIStateMachine:
         lines.append(subsection("Copy Menu (y):"))
         lines.append(binding("yc", "Copy cell"))
         lines.append(binding("yy", "Copy row"))
+        lines.append(binding("yj", "Copy row as JSON"))
         lines.append(binding("ya", "Copy all"))
         lines.append(binding("ye", "Export menu..."))
         lines.append("")

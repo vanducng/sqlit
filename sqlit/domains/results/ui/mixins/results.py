@@ -143,9 +143,7 @@ class ResultsMixin:
     def _normalize_column_name(self: ResultsMixinHost, name: str) -> str:
         trimmed = name.strip()
         if len(trimmed) >= 2:
-            if trimmed[0] == trimmed[-1] and trimmed[0] in ("\"", "`"):
-                trimmed = trimmed[1:-1]
-            elif trimmed[0] == "[" and trimmed[-1] == "]":
+            if (trimmed[0] == trimmed[-1] and trimmed[0] in ("\"", "`")) or (trimmed[0] == "[" and trimmed[-1] == "]"):
                 trimmed = trimmed[1:-1]
         if "." in trimmed and not any(q in trimmed for q in ("\"", "`", "[")):
             trimmed = trimmed.split(".")[-1]
@@ -751,6 +749,50 @@ class ResultsMixin:
         except Exception:
             return
         text = self._format_tsv([], [tuple(row_values)])
+        self._copy_text(text)
+        self._flash_table_yank(table, "row")
+
+    def action_ry_row_json(self: ResultsMixinHost) -> None:
+        """Copy current row as a JSON object (from yank menu).
+
+        Under transpose, the cursor's display column maps to an original DB
+        row; the label column (display col 0) has no row equivalent and
+        triggers a warning.
+        """
+        from sqlit.domains.results.formatters import format_row_json
+
+        self._clear_leader_pending()
+        table, columns, rows, stacked = self._get_active_results_context()
+        if not table or table.row_count <= 0:
+            self.notify("No results", severity="warning")
+            return
+        if not columns:
+            self.notify("No columns", severity="warning")
+            return
+        section = self._find_results_section(table) if stacked else None
+        transposed = (
+            section.transposed
+            if section is not None
+            else self._transposed_single
+        )
+        if transposed:
+            dc = int(table.cursor_coordinate.column) if hasattr(
+                table.cursor_coordinate, "column"
+            ) else 0
+            if dc == 0:
+                self.notify("No row at cursor", severity="warning")
+                return
+            orig_row_idx = dc - 1
+            if orig_row_idx >= len(rows):
+                return
+            row_tuple: tuple[Any, ...] = tuple(rows[orig_row_idx])
+        else:
+            try:
+                row_values = table.get_row_at(table.cursor_row)
+            except Exception:
+                return
+            row_tuple = tuple(row_values)
+        text = format_row_json(list(columns), row_tuple)
         self._copy_text(text)
         self._flash_table_yank(table, "row")
 

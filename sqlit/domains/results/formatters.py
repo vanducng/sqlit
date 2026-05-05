@@ -25,3 +25,8 @@ def format_json(columns: list[str], rows: list[tuple[Any, ...]]) -> str:
         for row in rows
     ]
     return json.dumps(result, indent=2, default=str)
+
+
+def format_row_json(columns: list[str], row: tuple[Any, ...]) -> str:
+    """Format a single row as a JSON object string."""
+    return json.dumps(dict(zip(columns, row)), indent=2, default=str)
